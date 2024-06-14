@@ -1,0 +1,19 @@
+oidc-providers:
+  # https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
+  - url: https://token.actions.githubusercontent.com
+    cache_key_exprs:
+      - '"github/" + claims.repository + "/" + claims.ref'
+      - '"github/" + claims.repository'
+
+  # https://docs.gitlab.com/ee/ci/secrets/id_token_authentication.html
+  - url: https://gitlab.com
+    cache_key_exprs:
+      - '"gitlab/" + claims.project_path + "/" + claims.ref_path'
+      - '"gitlab/" + claims.project_path'
+
+disk:
+  dir: /cache
+  limit: 50GB
+
+s3:
+  bucket: chacha
