@@ -13,12 +13,78 @@ import (
 	"github.com/google/uuid"
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/require"
+	actionscache "github.com/tonistiigi/go-actions-cache"
+	"go.uber.org/zap"
 	"net/http"
 	"testing"
 	"time"
 )
 
-func TestServer(t *testing.T) {
+func TestServerHTTPCacheProtocol(t *testing.T) {
+	addr, token := testServerCommon(t)
+
+	httpClient := http.Client{
+		Transport: NewHeadersTransport(map[string]string{
+			"Authorization": "Bearer " + token,
+		}, http.DefaultTransport),
+	}
+
+	key := uuid.NewString()
+
+	chachaServerEndpointURL := fmt.Sprintf("http://%s/%s", addr, key)
+
+	// Load of a non-existing key yields HTTP 404
+	resp, err := httpClient.Get(chachaServerEndpointURL)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	require.NoError(t, resp.Body.Close())
+
+	// Store of a non-existing key succeeds
+	resp, err = httpClient.Post(chachaServerEndpointURL, "application/octet-stream",
+		bytes.NewReader([]byte(key)))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	require.NoError(t, resp.Body.Close())
+
+	// Retrieval of an existing key succeeds
+	resp, err = httpClient.Get(chachaServerEndpointURL)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NoError(t, resp.Body.Close())
+}
+
+func TestServerGHACacheProtocol(t *testing.T) {
+	// Configure logger
+	logger, err := zap.NewDevelopment()
+	require.NoError(t, err)
+	zap.ReplaceGlobals(logger)
+
+	ctx := context.Background()
+
+	addr, token := testServerCommon(t)
+	cache, err := actionscache.New(token, fmt.Sprintf("http://%s/", addr), actionscache.Opt{})
+	require.NoError(t, err)
+
+	// Load of a non-existing key yields nothing
+	entry, err := cache.Load(ctx, "test")
+	require.NoError(t, err)
+	require.Nil(t, entry)
+
+	// Store of a non-existing key succeeds
+	require.NoError(t, cache.Save(ctx, "test", actionscache.NewBlob([]byte("Hello, World!"))))
+
+	// Retrieval of an existing key succeeds
+	entry, err = cache.Load(ctx, "test")
+	require.NoError(t, err)
+
+	buf := &bytes.Buffer{}
+	require.NoError(t, entry.WriteTo(ctx, buf))
+	require.Equal(t, "Hello, World!", buf.String())
+}
+
+func testServerCommon(t *testing.T) (string, string) {
+	t.Helper()
+
 	// Start an OIDC server
 	oidcServer, err := mockoidc.Run()
 	require.NoError(t, err)
@@ -27,7 +93,7 @@ func TestServer(t *testing.T) {
 	oidcProviders := []config.OIDCProvider{
 		{
 			URL:           oidcServer.Issuer(),
-			CacheKeyExprs: []string{`claims.iss + "-"`},
+			CacheKeyExprs: []string{`"mock-"`},
 		},
 	}
 
@@ -41,42 +107,21 @@ func TestServer(t *testing.T) {
 	require.NoError(t, err)
 
 	go func() {
-		err := chachaServer.Run(context.Background())
-		fmt.Println(err)
+		if err := chachaServer.Run(context.Background()); err != nil {
+			panic(err)
+		}
 	}()
 
-	token, err := oidcServer.Keypair.SignJWT(jwt.RegisteredClaims{
-		Issuer:    oidcServer.Issuer(),
-		IssuedAt:  &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
-		ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+	token, err := oidcServer.Keypair.SignJWT(jwt.MapClaims{
+		"iss": oidcServer.Issuer(),
+		"nbf": &jwt.NumericDate{Time: time.Now().Add(-time.Hour)},
+		"exp": &jwt.NumericDate{Time: time.Now().Add(time.Hour)},
+		// Needed by the github.com/tonistiigi/go-actions-cache
+		"ac": "[]",
 	})
 	require.NoError(t, err)
 
-	httpClient := http.Client{
-		Transport: NewHeadersTransport(map[string]string{
-			"Authorization": "Bearer " + token,
-		}, http.DefaultTransport),
-	}
-
-	key := uuid.NewString()
-
-	chachaServerEndpointURL := fmt.Sprintf("http://%s/%s", chachaServer.Addr(), key)
-
-	resp, err := httpClient.Get(chachaServerEndpointURL)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
-	require.NoError(t, resp.Body.Close())
-
-	resp, err = httpClient.Post(chachaServerEndpointURL, "application/octet-stream",
-		bytes.NewReader([]byte(key)))
-	require.NoError(t, err)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	require.NoError(t, resp.Body.Close())
-
-	resp, err = httpClient.Get(chachaServerEndpointURL)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, resp.Body.Close())
+	return chachaServer.Addr(), token
 }
 
 type HeadersTransport struct {

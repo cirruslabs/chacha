@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -105,7 +106,7 @@ func New(
 }
 
 func (server *Server) Addr() string {
-	return server.listener.Addr().String()
+	return strings.ReplaceAll(server.listener.Addr().String(), "[::]", "localhost")
 }
 
 func (server *Server) Run(ctx context.Context) error {

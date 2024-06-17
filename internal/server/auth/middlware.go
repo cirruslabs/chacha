@@ -15,6 +15,7 @@ import (
 const ContextKey = "auth"
 
 type Auth struct {
+	Token            string
 	CacheKeyPrefixes []string
 }
 
@@ -26,7 +27,7 @@ func Middleware(issToProvider map[string]*providerpkg.Provider) echo.MiddlewareF
 				return fail.Fail(c, http.StatusUnauthorized, "no JWT token was present")
 			}
 
-			if err := authenticate(c, issToProvider, token); err != nil {
+			if ok, err := authenticate(c, issToProvider, token); !ok || err != nil {
 				return err
 			}
 
@@ -51,12 +52,12 @@ func retrieveToken(request *http.Request) (string, bool) {
 	return "", false
 }
 
-func authenticate(c echo.Context, issToProvider map[string]*providerpkg.Provider, rawToken string) error {
+func authenticate(c echo.Context, issToProvider map[string]*providerpkg.Provider, rawToken string) (bool, error) {
 	parsedJWT, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{
 		jose.RS256,
 	})
 	if err != nil {
-		return fail.Fail(c, http.StatusUnauthorized, "failed to parse JWT token: %v", err)
+		return false, fail.Fail(c, http.StatusUnauthorized, "failed to parse JWT token: %v", err)
 	}
 
 	preClaims := struct {
@@ -64,42 +65,44 @@ func authenticate(c echo.Context, issToProvider map[string]*providerpkg.Provider
 	}{}
 
 	if err := parsedJWT.UnsafeClaimsWithoutVerification(&preClaims); err != nil {
-		return fail.Fail(c, http.StatusUnauthorized, "failed to get JWT token claims: %v", err)
+		return false, fail.Fail(c, http.StatusUnauthorized, "failed to get JWT token claims: %v", err)
 	}
 
 	entity, ok := issToProvider[preClaims.Iss]
 	if !ok {
-		return fail.Fail(c, http.StatusUnauthorized, "no OIDC provider registered "+
+		return false, fail.Fail(c, http.StatusUnauthorized, "no OIDC provider registered "+
 			"that can handle issuer %q", preClaims.Iss)
 	}
 
 	token, err := entity.Verifier.Verify(context.Background(), rawToken)
 	if err != nil {
-		return fail.Fail(c, http.StatusUnauthorized, "failed to verify JWT token: %v", err)
+		return false, fail.Fail(c, http.StatusUnauthorized, "failed to verify JWT token: %v", err)
 	}
 
 	var claims map[string]any
 
 	if err := token.Claims(&claims); err != nil {
-		return fail.Fail(c, http.StatusUnauthorized, "failed to get JWT token claims: %v", err)
+		return false, fail.Fail(c, http.StatusUnauthorized, "failed to get JWT token claims: %v", err)
 	}
 
 	env := map[string]any{
 		"claims": claims,
 	}
 
-	auth := &Auth{}
+	auth := &Auth{
+		Token: rawToken,
+	}
 
 	for idx, cacheKeyProgram := range entity.CacheKeyPrograms {
 		cacheKeyPrefix, err := expr.Run(cacheKeyProgram, env)
 		if err != nil {
-			return fail.Fail(c, http.StatusInternalServerError,
+			return false, fail.Fail(c, http.StatusInternalServerError,
 				"failed to calculate the cache key prefix: %v", err)
 		}
 
 		cacheKeyPrefixString, ok := cacheKeyPrefix.(string)
 		if !ok {
-			return fail.Fail(c, http.StatusInternalServerError, "cache key prefix expression "+
+			return false, fail.Fail(c, http.StatusInternalServerError, "cache key prefix expression "+
 				"%d should've evaluated to string, got %T instead", idx, cacheKeyPrefix)
 		}
 
@@ -108,5 +111,5 @@ func authenticate(c echo.Context, issToProvider map[string]*providerpkg.Provider
 
 	c.Set(ContextKey, auth)
 
-	return nil
+	return true, nil
 }

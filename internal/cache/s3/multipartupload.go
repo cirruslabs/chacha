@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	s3pkg "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/samber/lo"
@@ -27,7 +28,7 @@ func (mu *MultipartUpload) UploadPart(ctx context.Context, number int32, r io.Re
 		UploadId:   aws.String(mu.uploadID),
 		PartNumber: aws.Int32(number),
 		Body:       r,
-	})
+	}, s3pkg.WithAPIOptions(v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware))
 	if err != nil {
 		return err
 	}

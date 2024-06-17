@@ -77,9 +77,12 @@ func (cache *GHACache) get(c echo.Context) error {
 			return fail.Fail(c, http.StatusInternalServerError, "%v", err)
 		}
 
+		downloadURL := cache.baseURL.JoinPath(fmt.Sprintf("%s-%s", key, version))
+		downloadURL.User = url.UserPassword("", tokenFromContext(c))
+
 		return c.JSON(http.StatusOK, &getResponse{
 			Key: info.Key,
-			URL: cache.baseURL.JoinPath(info.Key).String(),
+			URL: downloadURL.String(),
 		})
 	}
 
@@ -132,7 +135,7 @@ func (cache *GHACache) updateUploadable(c echo.Context) error {
 		return fail.Fail(c, http.StatusBadRequest, "failed to parse Content-Range header: %v", err)
 	}
 
-	if len(httpRanges) != 0 {
+	if len(httpRanges) == 0 {
 		return fail.Fail(c, http.StatusBadRequest, "expected at least one Content-Range value")
 	}
 
@@ -202,6 +205,13 @@ func keyFromContext(c echo.Context, key string, version string) string {
 	auth := c.Get(authpkg.ContextKey).(*authpkg.Auth)
 
 	return auth.CacheKeyPrefixes[0] + fmt.Sprintf("%s-%s", key, version)
+}
+
+func tokenFromContext(c echo.Context) string {
+	//nolint:forcetypeassert // the existence of authentication and its type is guaranteed by the middleware
+	auth := c.Get(authpkg.ContextKey).(*authpkg.Auth)
+
+	return auth.Token
 }
 
 func generateID() int64 {

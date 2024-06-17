@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type HTTPCache struct {
@@ -149,7 +150,7 @@ func keyFromContext(c echo.Context) string {
 	//nolint:forcetypeassert // the existence of authentication and its type is guaranteed by the middleware
 	auth := c.Get(authpkg.ContextKey).(*authpkg.Auth)
 
-	return auth.CacheKeyPrefixes[0] + c.Request().URL.Path
+	return auth.CacheKeyPrefixes[0] + strings.TrimPrefix(c.Request().URL.Path, "/")
 }
 
 func backendErrorToFail(c echo.Context, key string, operation string, err error) error {
