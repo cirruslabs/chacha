@@ -10,7 +10,18 @@ Authentication can be done either by using `Authorization: Basic` (primarily int
 
 ## Configuration
 
-### OIDC providers (`oidc-providers` section)
+## Common settings
+
+* `base_url` — the URL on which the Chacha server is accessible externally
+    * needed by the GHA cache protocol to do a proper redirect when fetching the cache entries
+
+Here's an example configuration the covers common settings:
+
+```yaml
+base_url: https://example.com
+```
+
+### OIDC providers (`oidc_providers` section)
 
 To achieve secure multi-tenancy and prevent cache poisoning by malicious PRs we need to namespace cache keys.
 
@@ -21,7 +32,7 @@ These expressions can access the JWT token contents through `claims` field and s
 Here's an example configuration for GitHub and GitLab:
 
 ```yaml
-oidc-providers:
+oidc_providers:
   # https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
   - url: https://token.actions.githubusercontent.com
     cache_key_exprs:

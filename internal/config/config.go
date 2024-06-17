@@ -3,10 +3,25 @@ package config
 import (
 	"gopkg.in/yaml.v3"
 	"io"
+	"net/url"
 )
 
+type BaseURL url.URL
+
+func (baseURL *BaseURL) UnmarshalYAML(value *yaml.Node) error {
+	parsedURL, err := url.Parse(value.Value)
+	if err != nil {
+		return err
+	}
+
+	*baseURL = BaseURL(*parsedURL)
+
+	return nil
+}
+
 type Config struct {
-	OIDCProviders []OIDCProvider `yaml:"oidc-providers"`
+	BaseURL       BaseURL        `yaml:"base_url"`
+	OIDCProviders []OIDCProvider `yaml:"oidc_providers"`
 	Disk          Disk           `yaml:"disk"`
 	S3            S3             `yaml:"s3"`
 }

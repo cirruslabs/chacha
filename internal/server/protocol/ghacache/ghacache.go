@@ -14,11 +14,13 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
 
 type GHACache struct {
+	baseURL     *url.URL
 	remoteCache cachepkg.RemoteCache
 	uploadables *xsync.MapOf[int64, *Uploadable]
 }
@@ -42,8 +44,9 @@ type reserveUploadableResponse struct {
 	CacheID int64 `json:"cacheId"`
 }
 
-func New(group *echo.Group, remoteCache cachepkg.RemoteCache) *GHACache {
+func New(group *echo.Group, baseURL *url.URL, remoteCache cachepkg.RemoteCache) *GHACache {
 	gha := &GHACache{
+		baseURL:     baseURL,
 		remoteCache: remoteCache,
 		uploadables: xsync.NewMapOf[int64, *Uploadable](),
 	}
@@ -76,7 +79,7 @@ func (cache *GHACache) get(c echo.Context) error {
 
 		return c.JSON(http.StatusOK, &getResponse{
 			Key: info.Key,
-			URL: "",
+			URL: cache.baseURL.JoinPath(info.Key).String(),
 		})
 	}
 

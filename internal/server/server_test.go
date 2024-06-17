@@ -37,7 +37,7 @@ func TestServer(t *testing.T) {
 	remoteCache, err := s3.NewFromConfig(context.Background(), testutil.S3(t))
 	require.NoError(t, err)
 
-	chachaServer, err := server.New(":0", oidcProviders, localCache, remoteCache)
+	chachaServer, err := server.New(":0", nil, oidcProviders, localCache, remoteCache)
 	require.NoError(t, err)
 
 	go func() {

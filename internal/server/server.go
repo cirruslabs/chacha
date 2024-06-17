@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type Server struct {
 
 func New(
 	addr string,
+	baseURL *url.URL,
 	oidcProviders []configpkg.OIDCProvider,
 	localCache cachepkg.LocalCache,
 	remoteCache cachepkg.RemoteCache,
@@ -70,6 +72,13 @@ func New(
 	}
 	server.listener = listener
 
+	if baseURL == nil {
+		baseURL = &url.URL{
+			Scheme: "http",
+			Host:   server.Addr(),
+		}
+	}
+
 	// Configure HTTP server
 	e := echo.New()
 
@@ -84,7 +93,7 @@ func New(
 
 	// Serve GHA cache protocol
 	ghaCacheGroup := e.Group("/_apis/artifactcache")
-	ghacache.New(ghaCacheGroup, server.remoteCache)
+	ghacache.New(ghaCacheGroup, baseURL, server.remoteCache)
 
 	server.httpServer = &http.Server{
 		Addr:              ":8080",

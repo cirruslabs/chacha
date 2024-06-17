@@ -9,6 +9,7 @@ import (
 	serverpkg "github.com/cirruslabs/chacha/internal/server"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
+	"net/url"
 	"os"
 )
 
@@ -61,7 +62,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	server, err := serverpkg.New(addr, config.OIDCProviders, localCache, remoteCache)
+	server, err := serverpkg.New(addr, (*url.URL)(&config.BaseURL), config.OIDCProviders, localCache, remoteCache)
 	if err != nil {
 		return err
 	}
