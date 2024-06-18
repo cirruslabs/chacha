@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/render"
 	"github.com/labstack/echo/v4"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/samber/lo"
 	"math"
 	"math/rand"
 	"net/http"
@@ -63,27 +64,32 @@ func (cache *GHACache) get(c echo.Context) error {
 	keys := strings.Split(c.Request().URL.Query().Get("keys"), ",")
 	version := c.Request().URL.Query().Get("version")
 
-	for i, key := range keys {
-		if key == "" {
-			continue
-		}
-
-		info, err := cache.remoteCache.Info(c.Request().Context(), keyFromContext(c, key, version), i == 0)
-		if err != nil {
-			if errors.Is(err, cachepkg.ErrNotFound) {
+	for _, cacheKeyPrefix := range authFromContext(c).CacheKeyPrefixes {
+		for i, key := range keys {
+			if key == "" {
 				continue
 			}
 
-			return fail.Fail(c, http.StatusInternalServerError, "%v", err)
+			keyWithoutPrefix := fmt.Sprintf("%s-%s", key, version)
+			keyWithPrefix := cacheKeyPrefix + keyWithoutPrefix
+
+			info, err := cache.remoteCache.Info(c.Request().Context(), keyWithPrefix, i == 0)
+			if err != nil {
+				if errors.Is(err, cachepkg.ErrNotFound) {
+					continue
+				}
+
+				return fail.Fail(c, http.StatusInternalServerError, "%v", err)
+			}
+
+			downloadURL := cache.baseURL.JoinPath(keyWithoutPrefix)
+			downloadURL.User = url.UserPassword("", authFromContext(c).Token)
+
+			return c.JSON(http.StatusOK, &getResponse{
+				Key: info.Key,
+				URL: downloadURL.String(),
+			})
 		}
-
-		downloadURL := cache.baseURL.JoinPath(fmt.Sprintf("%s-%s", key, version))
-		downloadURL.User = url.UserPassword("", tokenFromContext(c))
-
-		return c.JSON(http.StatusOK, &getResponse{
-			Key: info.Key,
-			URL: downloadURL.String(),
-		})
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -101,7 +107,8 @@ func (cache *GHACache) reserveUploadable(c echo.Context) error {
 		CacheID: generateID(),
 	}
 
-	entry, err := cache.remoteCache.Put(c.Request().Context(), keyFromContext(c, request.Key, request.Version))
+	entry, err := cache.remoteCache.Put(c.Request().Context(),
+		keysFromContext(c, request.Key, request.Version)[0])
 	if err != nil {
 		return fail.Fail(c, http.StatusInternalServerError, "%v", err)
 	}
@@ -200,18 +207,17 @@ func getID(c echo.Context) (int64, bool) {
 	return id, true
 }
 
-func keyFromContext(c echo.Context, key string, version string) string {
+func authFromContext(c echo.Context) *authpkg.Auth {
 	//nolint:forcetypeassert // the existence of authentication and its type is guaranteed by the middleware
 	auth := c.Get(authpkg.ContextKey).(*authpkg.Auth)
 
-	return auth.CacheKeyPrefixes[0] + fmt.Sprintf("%s-%s", key, version)
+	return auth
 }
 
-func tokenFromContext(c echo.Context) string {
-	//nolint:forcetypeassert // the existence of authentication and its type is guaranteed by the middleware
-	auth := c.Get(authpkg.ContextKey).(*authpkg.Auth)
-
-	return auth.Token
+func keysFromContext(c echo.Context, key string, version string) []string {
+	return lo.Map(authFromContext(c).CacheKeyPrefixes, func(cacheKeyPrefix string, _ int) string {
+		return cacheKeyPrefix + fmt.Sprintf("%s-%s", key, version)
+	})
 }
 
 func generateID() int64 {
