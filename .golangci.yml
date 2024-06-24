@@ -1,0 +1,52 @@
+run:
+  timeout: 5m
+
+linters:
+  enable-all: true
+
+  disable:
+    # Pure insanity
+    - exhaustruct
+    - forbidigo
+    - depguard
+    - perfsprint
+    - prealloc
+    - containedctx
+
+    # We're not interested in formatting/sorting imports more than "go fmt" would do
+    - gci
+    - gofumpt
+    - goimports
+
+    # We're not a publicly available package, so it's OK to have dynamic errors
+    - err113
+
+    # We will control this ourselves
+    - varnamelen
+    - mnd
+    - gomnd
+    - paralleltest
+
+    # What else we're supposed to return if we've operated on an interface from the beginning?
+    - ireturn
+
+    # False positives
+    - wsl
+    - wrapcheck
+    - tagliatelle
+
+linters-settings:
+  funlen:
+    lines: 110
+
+issues:
+  exclude-dirs:
+    - internal/server/httprange
+  exclude-rules:
+    - path: internal/command/
+      linters:
+        # It's OK to use global variables for github.com/spf13/cobra commands
+        - gochecknoglobals
+    - path: internal/server/server_test.go
+      linters:
+        - noctx
