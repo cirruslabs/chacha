@@ -6,7 +6,7 @@ FSL-1.1-Apache-2.0
 
 ## Notice
 
-Copyright 2008-2024 Functional Software, Inc. dba Sentry
+Copyright 2024 Cirrus Labs, Inc.
 
 ## Terms and Conditions
 
