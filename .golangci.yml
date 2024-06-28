@@ -47,6 +47,10 @@ issues:
       linters:
         # It's OK to use global variables for github.com/spf13/cobra commands
         - gochecknoglobals
+    - path: internal/version/
+      linters:
+        # It's OK to use global variables for automatically settings versions through GoReleaser
+        - gochecknoglobals
     - path: internal/server/server_test.go
       linters:
         - noctx
