@@ -51,6 +51,9 @@ issues:
       linters:
         # It's OK to use global variables for automatically settings versions through GoReleaser
         - gochecknoglobals
+        # It's OK to use an init() function to automatically calculate the FullVersion, which needs
+        # to be a variable
+        - gochecknoinits
     - path: internal/server/server_test.go
       linters:
         - noctx
