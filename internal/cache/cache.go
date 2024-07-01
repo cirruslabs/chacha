@@ -16,7 +16,7 @@ type RemoteCache interface {
 }
 
 type MultipartUpload interface {
-	UploadPart(ctx context.Context, number int32, r io.Reader) error
+	UploadPart(ctx context.Context, number int32, r io.Reader, length int64) error
 	Size(ctx context.Context) (int64, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error

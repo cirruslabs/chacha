@@ -127,7 +127,8 @@ func (cache *HTTPCache) put(c echo.Context) error {
 				"for cache key %q: %v", key, err)
 		}
 
-		if err := multipartUpload.UploadPart(c.Request().Context(), partNumber, bytes.NewReader(buf[:n])); err != nil {
+		err = multipartUpload.UploadPart(c.Request().Context(), partNumber, bytes.NewReader(buf[:n]), int64(n))
+		if err != nil {
 			return err
 		}
 

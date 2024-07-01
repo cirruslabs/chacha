@@ -142,8 +142,9 @@ func (cache *GHACache) updateUploadable(c echo.Context) error {
 		return fail.Fail(c, http.StatusBadRequest, "failed to parse Content-Range header: %v", err)
 	}
 
-	if len(httpRanges) == 0 {
-		return fail.Fail(c, http.StatusBadRequest, "expected at least one Content-Range value")
+	if len(httpRanges) != 1 {
+		return fail.Fail(c, http.StatusBadRequest, "expected exactly one Content-Range value, got %d",
+			len(httpRanges))
 	}
 
 	partNumber, err := uploadable.RangeToPart.Tell(c.Request().Context(), httpRanges[0].Start, httpRanges[0].Length)
@@ -151,7 +152,8 @@ func (cache *GHACache) updateUploadable(c echo.Context) error {
 		return fail.Fail(c, http.StatusBadRequest, "%v", err)
 	}
 
-	return uploadable.MultipartUpload.UploadPart(c.Request().Context(), partNumber, c.Request().Body)
+	return uploadable.MultipartUpload.UploadPart(c.Request().Context(), partNumber, c.Request().Body,
+		httpRanges[0].Length)
 }
 
 func (cache *GHACache) commitUploadable(c echo.Context) error {

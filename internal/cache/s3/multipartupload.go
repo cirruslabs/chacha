@@ -21,16 +21,17 @@ type MultipartUpload struct {
 	mtx   sync.Mutex
 }
 
-func (mu *MultipartUpload) UploadPart(ctx context.Context, number int32, r io.Reader) error {
+func (mu *MultipartUpload) UploadPart(ctx context.Context, number int32, r io.Reader, length int64) error {
 	// Work around https://github.com/aws/aws-sdk-go-v2/issues/2038
 	opt := s3pkg.WithAPIOptions(v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware)
 
 	result, err := mu.client.UploadPart(ctx, &s3pkg.UploadPartInput{
-		Bucket:     aws.String(mu.bucket),
-		Key:        aws.String(mu.key),
-		UploadId:   aws.String(mu.uploadID),
-		PartNumber: aws.Int32(number),
-		Body:       r,
+		Bucket:        aws.String(mu.bucket),
+		Key:           aws.String(mu.key),
+		UploadId:      aws.String(mu.uploadID),
+		PartNumber:    aws.Int32(number),
+		Body:          r,
+		ContentLength: aws.Int64(length),
 	}, opt)
 	if err != nil {
 		return err
