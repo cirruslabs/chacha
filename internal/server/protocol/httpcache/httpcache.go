@@ -121,10 +121,10 @@ func (cache *HTTPCache) put(c echo.Context) error {
 	partNumber := int32(1)
 
 	for {
-		n, err := io.ReadFull(c.Request().Body, buf)
-		if err != nil && !(errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)) {
+		n, readFullErr := io.ReadFull(c.Request().Body, buf)
+		if readFullErr != nil && !(errors.Is(readFullErr, io.ErrUnexpectedEOF) || errors.Is(readFullErr, io.EOF)) {
 			return fail.Fail(c, http.StatusInternalServerError, "failed to read data to be uploaded "+
-				"for cache key %q: %v", key, err)
+				"for cache key %q: %v", key, readFullErr)
 		}
 
 		err = multipartUpload.UploadPart(c.Request().Context(), partNumber, bytes.NewReader(buf[:n]), int64(n))
@@ -132,7 +132,7 @@ func (cache *HTTPCache) put(c echo.Context) error {
 			return err
 		}
 
-		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		if errors.Is(readFullErr, io.EOF) || errors.Is(readFullErr, io.ErrUnexpectedEOF) {
 			break
 		}
 
