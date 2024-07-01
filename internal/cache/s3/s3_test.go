@@ -28,7 +28,8 @@ func TestSimple(t *testing.T) {
 	multipartUpload, err := cache.Put(ctx, "test")
 	require.NoError(t, err)
 
-	require.NoError(t, multipartUpload.UploadPart(ctx, 1, bytes.NewReader(contentBytes)))
+	require.NoError(t, multipartUpload.UploadPart(ctx, 1, bytes.NewReader(contentBytes),
+		int64(len(contentBytes))))
 
 	size, err := multipartUpload.Size(ctx)
 	require.NoError(t, err)
@@ -48,7 +49,8 @@ func TestSimple(t *testing.T) {
 	newContentsBytes := []byte("Bye bye!")
 	multipartUpload, err = cache.Put(ctx, "test")
 	require.NoError(t, err)
-	require.NoError(t, multipartUpload.UploadPart(ctx, 1, bytes.NewReader(newContentsBytes)))
+	require.NoError(t, multipartUpload.UploadPart(ctx, 1, bytes.NewReader(newContentsBytes),
+		int64(len(newContentsBytes))))
 	require.NoError(t, multipartUpload.Commit(ctx))
 
 	// Retrieval of a re-inserted key should yield modified contents
