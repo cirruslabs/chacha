@@ -15,7 +15,7 @@ func TestParse(t *testing.T) {
 	actualConfig, err := config.Parse(configFile)
 	require.NoError(t, err)
 	require.Equal(t, &config.Config{
-		BaseURL: config.BaseURL{
+		BaseURL: &config.BaseURL{
 			Scheme: "https",
 			Host:   "example.com",
 		},

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/url"
@@ -9,6 +10,10 @@ import (
 type BaseURL url.URL
 
 func (baseURL *BaseURL) UnmarshalYAML(value *yaml.Node) error {
+	if value.Value == "" {
+		return fmt.Errorf("base URL cannot be empty")
+	}
+
 	parsedURL, err := url.Parse(value.Value)
 	if err != nil {
 		return err
@@ -20,7 +25,7 @@ func (baseURL *BaseURL) UnmarshalYAML(value *yaml.Node) error {
 }
 
 type Config struct {
-	BaseURL       BaseURL        `yaml:"base_url"`
+	BaseURL       *BaseURL       `yaml:"base_url"`
 	OIDCProviders []OIDCProvider `yaml:"oidc_providers"`
 	Disk          Disk           `yaml:"disk"`
 	S3            S3             `yaml:"s3"`
