@@ -47,6 +47,10 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	if config.BaseURL == nil {
+		return fmt.Errorf("base URL needs to be specified")
+	}
+
 	maxBytes, err := humanize.ParseBytes(config.Disk.Limit)
 	if err != nil {
 		return err
@@ -62,7 +66,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	server, err := serverpkg.New(addr, (*url.URL)(&config.BaseURL), config.OIDCProviders, localCache, remoteCache)
+	server, err := serverpkg.New(addr, (*url.URL)(config.BaseURL), config.OIDCProviders, localCache, remoteCache)
 	if err != nil {
 		return err
 	}
