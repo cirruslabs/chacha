@@ -5,6 +5,7 @@ import (
 	"fmt"
 	cachepkg "github.com/cirruslabs/chacha/internal/cache"
 	authpkg "github.com/cirruslabs/chacha/internal/server/auth"
+	"github.com/cirruslabs/chacha/internal/server/box"
 	"github.com/cirruslabs/chacha/internal/server/fail"
 	"github.com/cirruslabs/chacha/internal/server/httprange"
 	"github.com/cirruslabs/chacha/internal/server/rangetopart"
@@ -23,6 +24,7 @@ import (
 type GHACache struct {
 	baseURL     *url.URL
 	remoteCache cachepkg.RemoteCache
+	boxManager  *box.Manager
 	uploadables *xsync.MapOf[int64, *Uploadable]
 }
 
@@ -45,10 +47,16 @@ type reserveUploadableResponse struct {
 	CacheID int64 `json:"cacheId"`
 }
 
-func New(group *echo.Group, baseURL *url.URL, remoteCache cachepkg.RemoteCache) *GHACache {
+func New(
+	group *echo.Group,
+	baseURL *url.URL,
+	remoteCache cachepkg.RemoteCache,
+	boxManager *box.Manager,
+) *GHACache {
 	gha := &GHACache{
 		baseURL:     baseURL,
 		remoteCache: remoteCache,
+		boxManager:  boxManager,
 		uploadables: xsync.NewMapOf[int64, *Uploadable](),
 	}
 
@@ -82,8 +90,21 @@ func (cache *GHACache) get(c echo.Context) error {
 				return fail.Fail(c, http.StatusInternalServerError, "%v", err)
 			}
 
+			// Generate a sealed box
+			sealedBox, err := cache.boxManager.Seal(box.Box{
+				CacheKeyPrefix: cacheKeyPrefix,
+			})
+			if err != nil {
+				return fail.Fail(c, http.StatusInternalServerError,
+					"failed to generate token for downloading the key %q: %v", info.Key, err)
+			}
+
+			// Craft the download URL
 			downloadURL := cache.baseURL.JoinPath(keyWithoutPrefix)
-			downloadURL.User = url.UserPassword("", authFromContext(c).Token)
+
+			q := downloadURL.Query()
+			q.Set("token", sealedBox)
+			downloadURL.RawQuery = q.Encode()
 
 			return c.JSON(http.StatusOK, &getResponse{
 				Key: info.Key,
