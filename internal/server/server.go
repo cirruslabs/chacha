@@ -6,6 +6,7 @@ import (
 	cachepkg "github.com/cirruslabs/chacha/internal/cache"
 	configpkg "github.com/cirruslabs/chacha/internal/config"
 	"github.com/cirruslabs/chacha/internal/server/auth"
+	"github.com/cirruslabs/chacha/internal/server/box"
 	"github.com/cirruslabs/chacha/internal/server/protocol/ghacache"
 	"github.com/cirruslabs/chacha/internal/server/protocol/httpcache"
 	providerpkg "github.com/cirruslabs/chacha/internal/server/provider"
@@ -27,6 +28,7 @@ type Server struct {
 	issToProvider map[string]*providerpkg.Provider
 	localCache    cachepkg.LocalCache
 	remoteCache   cachepkg.RemoteCache
+	boxManager    *box.Manager
 }
 
 func New(
@@ -41,6 +43,12 @@ func New(
 		localCache:    localCache,
 		remoteCache:   remoteCache,
 	}
+
+	boxManager, err := box.NewManager()
+	if err != nil {
+		return nil, err
+	}
+	server.boxManager = boxManager
 
 	for _, oidcProvider := range oidcProviders {
 		provider, err := oidc.NewProvider(context.Background(), oidcProvider.URL)
@@ -85,7 +93,7 @@ func New(
 
 	e.Use(
 		echozap.ZapLogger(zap.L()),
-		auth.Middleware(server.issToProvider),
+		auth.Middleware(server.issToProvider, boxManager),
 	)
 
 	// Serve HTTP cache protocol
@@ -94,7 +102,7 @@ func New(
 
 	// Serve GHA cache protocol
 	ghaCacheGroup := e.Group("/_apis/artifactcache")
-	ghacache.New(ghaCacheGroup, baseURL, server.remoteCache)
+	ghacache.New(ghaCacheGroup, baseURL, server.remoteCache, server.boxManager)
 
 	server.httpServer = &http.Server{
 		Addr:              ":8080",
