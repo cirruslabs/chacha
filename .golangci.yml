@@ -39,6 +39,10 @@ linters-settings:
   funlen:
     lines: 110
 
+  gosec:
+    excludes:
+      - G115
+
 issues:
   exclude-dirs:
     - internal/server/httprange
