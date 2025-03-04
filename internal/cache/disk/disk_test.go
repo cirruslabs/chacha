@@ -1,33 +1,41 @@
 package disk_test
 
 import (
+	"bytes"
+	"context"
+	cachepkg "github.com/cirruslabs/chacha/internal/cache"
 	"github.com/cirruslabs/chacha/internal/cache/disk"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestSimple(t *testing.T) {
+	ctx := context.Background()
+
 	cache, err := disk.New(t.TempDir(), 1*1024*1024)
 	require.NoError(t, err)
 
 	// Retrieval and deletion of a non-existent key should fail
-	_, err = cache.Get("test")
-	require.Error(t, err)
+	_, _, err = cache.Get(ctx, "test")
+	require.ErrorIs(t, err, cachepkg.ErrNotFound)
 
-	require.Error(t, cache.Delete("test"))
+	err = cache.Delete("test")
+	require.ErrorIs(t, err, cachepkg.ErrNotFound)
 
 	// Insertion of a non-existent key should succeed
 	contentBytes := []byte("Hello, World!")
-	pathToPut := filepath.Join(t.TempDir(), "test1.txt")
-	require.NoError(t, os.WriteFile(pathToPut, contentBytes, 0600))
+	eTag := uuid.NewString()
 
-	require.NoError(t, cache.Put("test", pathToPut))
+	err = cache.Put(ctx, "test", cachepkg.Metadata{
+		ETag: eTag,
+	}, bytes.NewReader(contentBytes))
+	require.NoError(t, err)
 
 	// Retrieval of an existent key should succeed
-	retrievalReader, err := cache.Get("test")
+	retrievalReader, _, err := cache.Get(ctx, "test")
 	require.NoError(t, err)
 
 	retrievedContentBytes, err := io.ReadAll(retrievalReader)
@@ -36,13 +44,12 @@ func TestSimple(t *testing.T) {
 
 	// Re-insertion of an existent key should succeed
 	newContentsBytes := []byte("Bye bye!")
-	pathToPut = filepath.Join(t.TempDir(), "test2.txt")
-	require.NoError(t, os.WriteFile(pathToPut, newContentsBytes, 0600))
 
-	require.NoError(t, cache.Put("test", pathToPut))
+	err = cache.Put(ctx, "test", cachepkg.Metadata{}, bytes.NewReader(newContentsBytes))
+	require.NoError(t, err)
 
 	// Retrieval of a re-inserted key should yield modified contents
-	retrievalReader, err = cache.Get("test")
+	retrievalReader, _, err = cache.Get(ctx, "test")
 	require.NoError(t, err)
 
 	retrievedContentBytes, err = io.ReadAll(retrievalReader)
@@ -53,55 +60,54 @@ func TestSimple(t *testing.T) {
 	require.NoError(t, cache.Delete("test"))
 
 	// Retrieval of a deleted key should fail
-	_, err = cache.Get("test")
-	require.Error(t, err)
+	_, _, err = cache.Get(ctx, "test")
+	require.ErrorIs(t, err, cachepkg.ErrNotFound)
 }
 
 func TestEvict(t *testing.T) {
-	cache, err := disk.New(t.TempDir(), 5)
+	ctx := context.Background()
+
+	cache, err := disk.New(t.TempDir(), 768)
 	require.NoError(t, err)
 
 	// Eviction shouldn't occur if cache entries fit the budget
-	tmpDir := t.TempDir()
-
-	smallPathToPut1 := filepath.Join(tmpDir, "small1.txt")
-	require.NoError(t, os.WriteFile(smallPathToPut1, []byte("ab"), 0600))
-	require.NoError(t, cache.Put("small1", smallPathToPut1))
-
-	smallPathToPut2 := filepath.Join(tmpDir, "small2.txt")
-	require.NoError(t, os.WriteFile(smallPathToPut2, []byte("cde"), 0600))
-	require.NoError(t, cache.Put("small2", smallPathToPut2))
-
-	_, err = cache.Get("small1")
+	err = cache.Put(ctx, "small1", cachepkg.Metadata{}, bytes.NewReader([]byte("ab")))
 	require.NoError(t, err)
 
-	_, err = cache.Get("small2")
+	err = cache.Put(ctx, "small2", cachepkg.Metadata{}, bytes.NewReader([]byte("cde")))
+	require.NoError(t, err)
+
+	_, _, err = cache.Get(ctx, "small1")
+	require.NoError(t, err)
+
+	_, _, err = cache.Get(ctx, "small2")
 	require.NoError(t, err)
 
 	// Eviction should occur for oldest entry if the budget is violated
-	smallPathToPut3 := filepath.Join(tmpDir, "small3.txt")
-	require.NoError(t, os.WriteFile(smallPathToPut3, []byte("f"), 0600))
-	require.NoError(t, cache.Put("small3", smallPathToPut3))
-
-	_, err = cache.Get("small1")
-	require.Error(t, err)
-
-	_, err = cache.Get("small2")
+	err = cache.Put(ctx, "small3", cachepkg.Metadata{}, bytes.NewReader([]byte("f")))
 	require.NoError(t, err)
 
-	_, err = cache.Get("small3")
+	_, _, err = cache.Get(ctx, "small1")
+	require.ErrorIs(t, err, cachepkg.ErrNotFound)
+
+	_, _, err = cache.Get(ctx, "small2")
+	require.NoError(t, err)
+
+	_, _, err = cache.Get(ctx, "small3")
 	require.NoError(t, err)
 }
 
 func TestSecure(t *testing.T) {
+	ctx := context.Background()
+
 	cacheDir := t.TempDir()
 	cache, err := disk.New(cacheDir, 1*1024*1024)
 	require.NoError(t, err)
 
 	// Ensure that insecure keys are percent-encoded
-	pathToPut := filepath.Join(t.TempDir(), "test.txt")
-	require.NoError(t, os.WriteFile(pathToPut, []byte("doesn't matter"), 0600))
-	require.NoError(t, cache.Put("../../../../../etc/passwd", pathToPut))
+	err = cache.Put(ctx, "../../../../../etc/passwd", cachepkg.Metadata{},
+		bytes.NewReader([]byte("doesn't matter")))
+	require.NoError(t, err)
 
 	dirEntries, err := os.ReadDir(cacheDir)
 	require.NoError(t, err)
@@ -112,5 +118,5 @@ func TestSecure(t *testing.T) {
 		dirEntryNames = append(dirEntryNames, entry.Name())
 	}
 
-	require.Equal(t, []string{"%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"}, dirEntryNames)
+	require.Regexp(t, "[A-Za-z0-9]+", dirEntryNames)
 }

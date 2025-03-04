@@ -24,7 +24,6 @@ linters:
     # We will control this ourselves
     - varnamelen
     - mnd
-    - gomnd
     - paralleltest
 
     # What else we're supposed to return if we've operated on an interface from the beginning?
@@ -35,9 +34,15 @@ linters:
     - wrapcheck
     - tagliatelle
 
+    # Deprecated linters
+    - tenv
+
 linters-settings:
   funlen:
     lines: 110
+
+  cyclop:
+    max-complexity: 14
 
   gosec:
     excludes:
@@ -58,6 +63,7 @@ issues:
         # It's OK to use an init() function to automatically calculate the FullVersion, which needs
         # to be a variable
         - gochecknoinits
-    - path: internal/server/server_test.go
+    - path: internal/server/.*_test.go
       linters:
         - noctx
+        - funlen

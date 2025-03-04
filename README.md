@@ -1,69 +1,135 @@
 # Chacha
 
-Chacha is caching proxy aimed to speed-up cache retrieval operations for Cirrus Runners.
+Chacha is an HTTP caching proxy aimed to speed-up cache retrieval operations for [Cirrus Runners](https://cirrus-runners.app/) and VM image fetches through OCI for [Tart](https://tart.run/).
 
-It tries to use the local disk when possible and falls back to a slower backend (such as S3) when no cache hit occurs.
+It can store cached entries [on local disk](#disk-cache-disk-optional) with bounded size and work in [cluster mode](#cluster-cache-cluster-optional) to store cache entries on other Chacha nodes (sharding) to increase the overall storage capacity.
 
-HTTP cache and GHA cache protocols are currently implemented.
+Chacha supports [TLS interception](#tls-interceptor-tls-interceptor-optional) to handle HTTPS requests that normally utilize the `CONNECT` method to connect to the target HTTPS server.
 
-Authentication can be done either by using `Authorization: Basic` (primarily intended for HTTP cache) or via `Authorization: Bearer` (primarily intended for GHA cache protocol). The password (in case of basic access authentication) and the token (in case of bearer authentication) excepted to be a JWT token provided by [GitHub](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect), [Gitlab](https://docs.gitlab.com/ee/ci/secrets/id_token_authentication.html) or any other OIDC provider.
+Chacha tries to build on:
+
+* [RFC 9110 "HTTP Semantics"](https://datatracker.ietf.org/doc/html/rfc9110)
+* [RFC 9111 "HTTP Caching"](https://datatracker.ietf.org/doc/html/rfc9111)
+* [RFC 9112 "HTTP/1.1"](https://datatracker.ietf.org/doc/html/rfc9112)
+
+With the following exceptions:
+
+* Chacha is always validating: latency is traded for simplicity and security
+* For certain URLs, [you can specify `rules`](#rules-rules-optional) to override the default standard-like behavior, for example, you can:
+  * ignore the existence of `Authorization` header in the request for caching purposes
+  * skip certain URL parameters (e.g. `X-Amz-Date` in S3 pre-signed URLs) from the cache key for caching purposes
 
 ## Configuration
 
-## Common settings
+### Address to listen on (`addr`, required)
 
-* `base_url` — the URL on which the Chacha server is accessible externally
-    * needed by the GHA cache protocol to do a proper redirect when fetching the cache entries
+Can be implicit (`:8080`, non-cluster mode only) or explicit (`127.0.0.1:8080`, normal and cluster modes).
 
-Here's an example configuration the covers common settings:
+#### Structure
 
-```yaml
-base_url: https://example.com
-```
+* `addr` (string, required)
 
-### OIDC providers (`oidc_providers` section)
-
-To achieve secure multi-tenancy and prevent cache poisoning by malicious PRs we need to namespace cache keys.
-
-Since each cache operation will be authenticated using a JWT token, Chacha provides a way to dynamically generate cache prefixes using [Expr](https://expr-lang.org/) expressions.
-
-These expressions can access the JWT token contents through `claims` field and should always return a `string`.
-
-Here's an example configuration for GitHub and GitLab:
+#### Example
 
 ```yaml
-oidc_providers:
-  # https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
-  - url: https://token.actions.githubusercontent.com
-    cache_key_exprs:
-      - '"github/" + claims.repository + "/" + claims.ref'
-      - '"github/" + claims.repository'
-
-  # https://docs.gitlab.com/ee/ci/secrets/id_token_authentication.html
-  - url: https://gitlab.com
-    cache_key_exprs:
-      - '"gitlab/" + claims.project_path + "/" + claims.ref_path'
-      - '"gitlab/" + claims.project_path'
+addr: 127.0.0.1:8080
 ```
 
-Here you can see that multiple cache key expressions are specified. This acts as a fallback for read-only operations, which has an effect of increasing the cache hit-rate for non-default branches.
+### Disk cache (`disk`, optional)
 
-### Local and remote caches (`disk` and `s3` sections)
+Enables caching of HTTP response bodies on local disk, with an optional limit after which evictions will occur.
 
-These sections let you specify the local and remote cache configurations.
+#### Structure
 
-For example, with the following configuration:
+* `disk` (mapping, optional)
+  * `dir` (string, required) — directory in which cache entries will be stored
+  * `limit` (string, required) — limit (e.g. `50GB`) after which Chacha will start dropping the least recently accessed entries to free up the space
+
+#### Example
 
 ```yaml
 disk:
-  dir: /cache
+  dir: ~/chacha
   limit: 50GB
-
-s3:
-  bucket: chacha
 ```
 
-The on-disk cache will be consulted first on cache retrieval operation, and if no cache hit occurs, it will fall back to S3, additionally populating the on-disk cache.
+### TLS interceptor (`tls-interceptor`, optional)
+
+TLS interceptor functionality allows Chacha to support `CONNECT` method, which is usually what proxy clients use to establish the connection with an HTTPS server.
+
+TLS interceptor configuration requires a CA certificate and a key, both of which can be generated using OpenSSL:
+
+```shell
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -keyout key.pem -out cert.pem -sha256 -days 365 -nodes -subj "/CN=Chacha Proxy Server"
+```
+
+#### Structure
+
+* `tls-interceptor` (mapping, optional)
+  * `cert` (string, required) — path to a CA certificate in PEM format
+  * `key` (string, required) — path to a CA private key in PEM format
+
+#### Example
+
+```yaml
+tls-interceptor:
+  cert: /etc/chacha/root-ca.pem
+  key: /etc/chacha/root-key.pem
+```
+
+### Rules (`rules`, optional)
+
+Offers an escape hatch for violating RFC specifications for certain URLs.
+
+#### Structure
+
+* `paths` (sequence, optional)
+  * `pattern` (string, required) — regular expression that matches the URL to be proxied
+  * `ignore-authorization-header` (boolean, optional) — whether to ignore the existence of `Authorization` header for a given URL request, thus enabling its caching
+  * `ignore-parameters` (sequence of strings, optional) — names of URL parameters to not include in the final cache key
+
+#### Example
+
+```yaml
+paths:
+  - pattern: "https:\/\/ghcr.io\/v2\/.*\/blobs\/sha256:[^\/]+"
+    ignore-authorization-header: true
+
+  - pattern: "https:\/\/[^\/]+.r2.cloudflarestorage.com\/.*"
+    ignore-parameters:
+      - "X-Amz-Date"
+      - "X-Amz-Signature"
+```
+
+### Cluster cache (`cluster`, optional)
+
+Enabling cluster mode distributes Chacha's cache across multiple nodes.
+
+When enabled, Chacha performs a cache operation by picking a single node from `nodes` using a [rendezvous hashing algorithm](https://en.wikipedia.org/wiki/Rendezvous_hashing) with the calculated cache key, and then:
+
+* in case Chacha's own `addr` is identical to the selected node — it'll use a local disk cache, which will additionally be exposed to other nodes via Chacha's KV protocol
+* otherwise — Chacha will use a remote disk cache (through Chacha's KV protocol) on the selected node
+
+Structure:
+
+* `cluster` (dict, optional)
+  * `secret` (string, required) — secret token used for authentication and authorization between nodes
+  * `nodes` (sequence of dicts, required) — a list of nodes responsible for storing the cache entries
+    * `addr` (string, required) — address of the Chacha node
+
+Example:
+
+```yaml
+addr: 192.168.0.1:8080
+
+cluster:
+  secret: "AV8B._W.@cr7-n3ZcnBkUtXy7natj.KN"
+
+  nodes:
+    - addr: 192.168.0.2:8080
+    - addr: 192.168.0.8:8080
+    - addr: 192.168.0.16:8080
+```
 
 ## Running
 

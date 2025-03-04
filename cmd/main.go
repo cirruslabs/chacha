@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -18,7 +19,7 @@ func main() {
 
 func mainImpl() bool {
 	// Set up a signal-interruptible context
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	// Initialize logger
