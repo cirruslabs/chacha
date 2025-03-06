@@ -49,7 +49,7 @@ Enables caching of HTTP response bodies on local disk, with an optional limit af
 
 ```yaml
 disk:
-  dir: ~/chacha
+  dir: /chacha
   limit: 50GB
 ```
 
