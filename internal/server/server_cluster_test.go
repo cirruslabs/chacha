@@ -40,7 +40,7 @@ func TestCluster(t *testing.T) {
 		server.WithLogger(logger.Sugar()),
 	}
 
-	firstAddr := chachaServerWithAddr(t, ":8081", firstOpts...)
+	firstAddr := chachaServerWithAddr(t, "127.0.0.1:8081", firstOpts...)
 
 	firstURL, err := url.Parse(fmt.Sprintf("http://%s", firstAddr))
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestCluster(t *testing.T) {
 		server.WithLogger(logger.Sugar()),
 	}
 
-	_ = chachaServerWithAddr(t, ":8082", secondOpts...)
+	_ = chachaServerWithAddr(t, "127.0.0.1:8082", secondOpts...)
 
 	// Perform the first request
 	httpClient := &http.Client{
@@ -165,7 +165,7 @@ func TestClusterUnavailableTimeout(t *testing.T) {
 		server.WithLogger(logger.Sugar()),
 	}
 
-	firstAddr := chachaServerWithAddr(t, ":8083", firstOpts...)
+	firstAddr := chachaServerWithAddr(t, "127.0.0.1:8083", firstOpts...)
 
 	firstURL, err := url.Parse(fmt.Sprintf("http://%s", firstAddr))
 	require.NoError(t, err)

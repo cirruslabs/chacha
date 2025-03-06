@@ -40,7 +40,7 @@ func TestKV(t *testing.T) {
 		),
 	}
 
-	addr := chachaServerWithAddr(t, ":0", opts...)
+	addr := chachaServerWithAddr(t, "127.0.0.1:8080", opts...)
 
 	kv := kvpkg.New(addr, secret)
 
