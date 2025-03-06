@@ -193,6 +193,8 @@ func (disk *Disk) Delete(key string) error {
 }
 
 func (disk *Disk) path(key string) string {
+	// On macOS, the maximum filename length is 255 characters (inclusive),
+	// so the safest way to avoid errors is to hash the cache entry's key
 	hash := sha256.Sum256([]byte(key))
 
 	return filepath.Join(disk.dir, hex.EncodeToString(hash[:]))
