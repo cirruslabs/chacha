@@ -36,7 +36,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 	if err != nil && !errors.Is(err, cachepkg.ErrNotFound) {
 		if kv, ok := cache.(*kv.KV); ok {
 			return responder.NewCodef(http.StatusBadGateway, "failed to retrieve cache entry "+
-				"fir key %q: cluster node %s is not available: %v", key, kv.Node(), err)
+				"for key %q: cluster node %s is not available: %v", key, kv.Node(), err)
 		}
 
 		return responder.NewCodef(http.StatusInternalServerError, "failed to retrieve cache entry "+
