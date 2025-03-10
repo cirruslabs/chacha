@@ -74,17 +74,14 @@ func (disk *Disk) Get(_ context.Context, key string) (io.ReadCloser, cache.Metad
 			" for the cache entry %q: %w", key, err)
 	}
 
-	blobReader, info, err := disk.getInner(cacheFile)
+	reader, info, err := disk.getInner(cacheFile)
 	if err != nil {
 		_ = cacheFile.Close()
 
 		return nil, cache.Metadata{}, fmt.Errorf("failed to read cache entry %q: %w", key, err)
 	}
 
-	return &Reader{
-		cacheFile:  cacheFile,
-		blobReader: blobReader,
-	}, info.Metadata, nil
+	return reader, info.Metadata, nil
 }
 
 func (disk *Disk) Put(_ context.Context, key string, metadata cache.Metadata, blobReader io.Reader) error {
@@ -229,7 +226,10 @@ func (disk *Disk) getInner(cacheFile *os.File) (fs.File, Info, error) {
 		return nil, Info{}, fmt.Errorf("failed to read from ZIP file: %w", err)
 	}
 
-	return blobReader, *info, nil
+	return &Reader{
+		cacheFile:  cacheFile,
+		blobReader: blobReader,
+	}, *info, nil
 }
 
 func (disk *Disk) accept(key string, path string) error {

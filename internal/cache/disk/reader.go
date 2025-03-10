@@ -10,6 +10,10 @@ type Reader struct {
 	blobReader fs.File
 }
 
+func (entry *Reader) Stat() (fs.FileInfo, error) {
+	return entry.blobReader.Stat()
+}
+
 func (entry *Reader) Read(p []byte) (int, error) {
 	return entry.blobReader.Read(p)
 }
