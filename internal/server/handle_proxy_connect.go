@@ -59,7 +59,7 @@ func (server *Server) handleProxyConnect(writer http.ResponseWriter, request *ht
 	})
 
 	if err := tlsConn.HandshakeContext(request.Context()); err != nil {
-		return responder.NewEmptyf("failed to perofrm TLS connection handshake: %v", err)
+		return responder.NewEmptyf("failed to perform TLS connection handshake: %v", err)
 	}
 
 	ephemeralHTTPServer := &http.Server{
