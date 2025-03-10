@@ -1,39 +1,16 @@
 package config
 
 import (
-	"fmt"
 	"gopkg.in/yaml.v3"
 	"io"
-	"net/url"
 )
 
-type BaseURL url.URL
-
-func (baseURL *BaseURL) UnmarshalYAML(value *yaml.Node) error {
-	if value.Value == "" {
-		return fmt.Errorf("base URL cannot be empty")
-	}
-
-	parsedURL, err := url.Parse(value.Value)
-	if err != nil {
-		return err
-	}
-
-	*baseURL = BaseURL(*parsedURL)
-
-	return nil
-}
-
 type Config struct {
-	BaseURL       *BaseURL       `yaml:"base_url"`
-	OIDCProviders []OIDCProvider `yaml:"oidc_providers"`
-	Disk          Disk           `yaml:"disk"`
-	S3            S3             `yaml:"s3"`
-}
-
-type OIDCProvider struct {
-	URL           string   `yaml:"url"`
-	CacheKeyExprs []string `yaml:"cache_key_exprs"`
+	Addr           string          `yaml:"addr"`
+	Disk           *Disk           `yaml:"disk"`
+	TLSInterceptor *TLSInterceptor `yaml:"tls-interceptor"`
+	Rules          []Rule          `yaml:"rules"`
+	Cluster        *Cluster        `yaml:"cluster"`
 }
 
 type Disk struct {
@@ -41,16 +18,30 @@ type Disk struct {
 	Limit string `yaml:"limit"`
 }
 
-type S3 struct {
-	Bucket string `yaml:"bucket"`
+type TLSInterceptor struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+}
+
+type Rule struct {
+	Pattern                   string   `yaml:"pattern"`
+	IgnoreAuthorizationHeader bool     `yaml:"ignore-authorization-header"`
+	IgnoreParameters          []string `yaml:"ignore-parameters"`
+}
+
+type Cluster struct {
+	Secret string `yaml:"secret"`
+	Nodes  []Node `yaml:"nodes"`
+}
+
+type Node struct {
+	Addr string `yaml:"addr"`
 }
 
 func Parse(r io.Reader) (*Config, error) {
 	var config Config
 
-	decoder := yaml.NewDecoder(r)
-
-	if err := decoder.Decode(&config); err != nil {
+	if err := yaml.NewDecoder(r).Decode(&config); err != nil {
 		return nil, err
 	}
 

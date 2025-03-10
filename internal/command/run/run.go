@@ -3,17 +3,18 @@ package run
 import (
 	"bytes"
 	"fmt"
-	"github.com/cirruslabs/chacha/internal/cache/disk"
-	"github.com/cirruslabs/chacha/internal/cache/s3"
-	"github.com/cirruslabs/chacha/internal/config"
+	diskpkg "github.com/cirruslabs/chacha/internal/cache/disk"
+	configpkg "github.com/cirruslabs/chacha/internal/config"
 	serverpkg "github.com/cirruslabs/chacha/internal/server"
+	"github.com/cirruslabs/chacha/internal/server/cluster"
+	"github.com/cirruslabs/chacha/internal/server/rule"
+	"github.com/cirruslabs/chacha/internal/server/tlsinterceptor"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
-	"net/url"
+	"go.uber.org/zap"
 	"os"
 )
 
-var addr string
 var configPath string
 
 func NewCommand() *cobra.Command {
@@ -23,8 +24,6 @@ func NewCommand() *cobra.Command {
 		RunE:  run,
 	}
 
-	cmd.Flags().StringVarP(&addr, "listen", "l", ":8080",
-		"address to listen on")
 	cmd.Flags().StringVarP(&configPath, "file", "f", "",
 		"configuration file path (e.g. /etc/chacha.yml)")
 
@@ -42,31 +41,60 @@ func run(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to read configuration file at path %s: %w", configPath, err)
 	}
 
-	config, err := config.Parse(bytes.NewReader(configBytes))
+	config, err := configpkg.Parse(bytes.NewReader(configBytes))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse configuration file at path %s: %w", configPath, err)
 	}
 
-	if config.BaseURL == nil {
-		return fmt.Errorf("base URL needs to be specified")
+	opts := []serverpkg.Option{
+		serverpkg.WithLogger(zap.S()),
 	}
 
-	maxBytes, err := humanize.ParseBytes(config.Disk.Limit)
-	if err != nil {
-		return err
+	if config.Disk != nil {
+		limitBytes, err := humanize.ParseBytes(config.Disk.Limit)
+		if err != nil {
+			return fmt.Errorf("failed to parse disk limit value %q: %w", config.Disk.Limit, err)
+		}
+
+		disk, err := diskpkg.New(config.Disk.Dir, limitBytes)
+		if err != nil {
+			return err
+		}
+
+		opts = append(opts, serverpkg.WithDisk(disk))
 	}
 
-	localCache, err := disk.New(config.Disk.Dir, maxBytes)
-	if err != nil {
-		return err
+	if config.TLSInterceptor != nil {
+		tlsInterceptor, err := tlsinterceptor.NewFromFiles(config.TLSInterceptor.Cert, config.TLSInterceptor.Key)
+		if err != nil {
+			return err
+		}
+
+		opts = append(opts, serverpkg.WithTLSInterceptor(tlsInterceptor))
 	}
 
-	remoteCache, err := s3.New(cmd.Context(), config.S3.Bucket)
-	if err != nil {
-		return err
+	if len(config.Rules) != 0 {
+		var rules rule.Rules
+
+		for _, configMatch := range config.Rules {
+			rule, err := rule.New(configMatch.Pattern, configMatch.IgnoreAuthorizationHeader,
+				configMatch.IgnoreParameters)
+			if err != nil {
+				return err
+			}
+
+			rules = append(rules, rule)
+		}
+
+		opts = append(opts, serverpkg.WithRules(rules))
 	}
 
-	server, err := serverpkg.New(addr, (*url.URL)(config.BaseURL), config.OIDCProviders, localCache, remoteCache)
+	if config.Cluster != nil {
+		opts = append(opts, serverpkg.WithCluster(cluster.New(config.Cluster.Secret,
+			config.Addr, config.Cluster.Nodes)))
+	}
+
+	server, err := serverpkg.New(config.Addr, opts...)
 	if err != nil {
 		return err
 	}
