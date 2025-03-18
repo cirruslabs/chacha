@@ -1,14 +1,18 @@
 package server
 
 import (
+	"context"
 	"errors"
 	cachepkg "github.com/cirruslabs/chacha/internal/cache"
 	"github.com/cirruslabs/chacha/internal/cache/kv"
 	"github.com/cirruslabs/chacha/internal/server/responder"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 //nolint:cyclop,funlen // not sure if chopping this function will make the matters easier
@@ -136,16 +140,38 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 				"for key %q: %v", key, err)
 		}
 
+		// Metrics
+		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		server.cacheOperationCounter.Add(context.Background(), 1, metric.WithAttributes(
+			attribute.String("type", "miss"),
+		))
+
 		return responder.NewEmptyf("fetched from the upstream, cache entry is outdated")
 	case upstreamResponse.StatusCode == http.StatusNotModified && cacheEntryReader != nil:
 		// Our cached entry is up-to-date, return cache entry contents
 
 		writer.WriteHeader(http.StatusOK)
 
-		if _, err := io.Copy(writer, cacheEntryReader); err != nil {
+		copyStartAt := time.Now()
+
+		n, err := io.Copy(writer, cacheEntryReader)
+		if err != nil {
 			return responder.NewCodef(http.StatusInternalServerError, "failed to write all data "+
 				"to the client: %v", err)
 		}
+
+		// Metrics
+		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		server.cacheOperationCounter.Add(context.Background(), 1, metric.WithAttributes(
+			attribute.String("type", "hit"),
+		))
+
+		bytesPerSecond := float64(n) / time.Since(copyStartAt).Seconds()
+
+		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		server.cacheSpeedHistogram.Record(context.Background(), int64(bytesPerSecond), metric.WithAttributes(
+			attribute.String("type", "serve"),
+		))
 
 		return responder.NewEmptyf("retrieved from the cache")
 	default:
@@ -156,6 +182,12 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 			return responder.NewCodef(http.StatusInternalServerError, "failed to write all data "+
 				"to the client: %v", err)
 		}
+
+		// Metrics
+		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		server.cacheOperationCounter.Add(context.Background(), 1, metric.WithAttributes(
+			attribute.String("type", "not-allowed"),
+		))
 
 		return responder.NewEmptyf("fetched from the upstream, caching is not allowed")
 	}

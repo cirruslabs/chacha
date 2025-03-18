@@ -25,13 +25,7 @@ func (server *Server) handleProxyConnect(writer http.ResponseWriter, request *ht
 		return responder.NewCodef(http.StatusNotAcceptable, "only CONNECTs to port 443 are allowed")
 	}
 
-	hijacker, ok := writer.(http.Hijacker)
-	if !ok {
-		return responder.NewCodef(http.StatusInternalServerError, "failed to hijack the connection: "+
-			"writer does not implement the http.Hijacker")
-	}
-
-	netConn, bufrw, err := hijacker.Hijack()
+	netConn, bufrw, err := http.NewResponseController(writer).Hijack()
 	if err != nil {
 		return responder.NewCodef(http.StatusInternalServerError, "failed to hijack the connection: "+
 			"%v", err)
