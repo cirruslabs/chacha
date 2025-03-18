@@ -166,7 +166,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 			attribute.String("type", "hit"),
 		))
 
-		bytesPerSecond := float64(n) / time.Since(copyStartAt).Seconds()
+		bytesPerSecond := float64(n) / max(time.Since(copyStartAt).Seconds(), 1)
 
 		//nolint:contextcheck // can's use request.Context() here because it might be canceled
 		server.cacheSpeedHistogram.Record(context.Background(), int64(bytesPerSecond), metric.WithAttributes(
