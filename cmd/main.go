@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/cirruslabs/chacha/internal/command"
 	"github.com/cirruslabs/chacha/internal/logginglevel"
+	"github.com/cirruslabs/chacha/internal/opentelemetry"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
@@ -38,6 +39,15 @@ func mainImpl() bool {
 	// Replace zap.L() and zap.S() to avoid
 	// propagating the *zap.Logger by hand
 	zap.ReplaceGlobals(logger)
+
+	// Initialize OpenTelemetry
+	opentelemetryDeinit, err := opentelemetry.Init(ctx)
+	if err != nil {
+		logger.Sugar().Errorf("failed to initialize OpenTelemetry: %v", err)
+
+		return false
+	}
+	defer opentelemetryDeinit()
 
 	if err := command.NewRootCommand().ExecuteContext(ctx); err != nil {
 		logger.Sugar().Error(err)
