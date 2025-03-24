@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"
 )
@@ -25,7 +24,7 @@ var (
 	DefaultTracer = otel.Tracer("")
 )
 
-func Init(ctx context.Context) (func(), error) {
+func Init(ctx context.Context) (zapcore.Core, func(), error) {
 	// Avoid logging errors when local OpenTelemetry Collector is not available, for example:
 	// "failed to upload metrics: [...]: dial tcp 127.0.0.1:4318: connect: connection refused"
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(_ error) {
@@ -35,7 +34,7 @@ func Init(ctx context.Context) (func(), error) {
 	// Work around https://github.com/open-telemetry/opentelemetry-go/issues/4834
 	if _, ok := os.LookupEnv("OTEL_EXPORTER_OTLP_ENDPOINT"); !ok {
 		if err := os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -47,12 +46,12 @@ func Init(ctx context.Context) (func(), error) {
 		),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resource, err := resource.Merge(customResource, resource.Default())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Metrics
@@ -60,7 +59,7 @@ func Init(ctx context.Context) (func(), error) {
 
 	metricExporter, err := otlpmetrichttp.New(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	meterProvider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithResource(resource),
@@ -74,7 +73,7 @@ func Init(ctx context.Context) (func(), error) {
 	// Traces
 	traceExporter, err := otlptracehttp.New(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	traceProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource),
@@ -88,7 +87,7 @@ func Init(ctx context.Context) (func(), error) {
 	// Logs
 	logExporter, err := otlploghttp.New(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	logProvider := sdklog.NewLoggerProvider(
 		sdklog.WithResource(resource),
@@ -102,14 +101,10 @@ func Init(ctx context.Context) (func(), error) {
 	global.SetLoggerProvider(logProvider)
 
 	// zap → OpenTelemetry bridge
-	zap.WrapCore(func(originalCore zapcore.Core) zapcore.Core {
-		otelzapCore := otelzap.NewCore("github.com/cirruslabs/chacha/internal/opentelemetry",
-			otelzap.WithLoggerProvider(logProvider))
+	opentelemetryCore := otelzap.NewCore("github.com/cirruslabs/chacha/internal/opentelemetry",
+		otelzap.WithLoggerProvider(logProvider))
 
-		return zapcore.NewTee(originalCore, otelzapCore)
-	})
-
-	return func() {
+	return opentelemetryCore, func() {
 		for _, finalizer := range finalizers {
 			finalizer()
 		}
