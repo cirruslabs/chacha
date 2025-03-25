@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
+	sdkresource "go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap/zapcore"
@@ -39,17 +39,17 @@ func Init(ctx context.Context) (zapcore.Core, func(), error) {
 	}
 
 	// Provide Chacha-specific default resource attributes
-	customResource, err := resource.New(ctx,
-		resource.WithAttributes(
-			semconv.ServiceName("chacha"),
-			semconv.ServiceVersion(version.Version),
-		),
-	)
+	resource := sdkresource.Default()
+
+	resource, err := sdkresource.Merge(resource, sdkresource.NewSchemaless(
+		semconv.ServiceName("chacha"),
+		semconv.ServiceVersion(version.Version),
+	))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	resource, err := resource.Merge(customResource, resource.Default())
+	resource, err = sdkresource.Merge(resource, sdkresource.Environment())
 	if err != nil {
 		return nil, nil, err
 	}
