@@ -153,8 +153,13 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			responder = server.handleClusterPut(capturingResponseWriter, request)
 			operation = "cluster-put"
 		case http.MethodGet:
-			responder = server.handleClusterGet(capturingResponseWriter, request)
-			operation = "cluster-get"
+			if request.URL.Path == "/health" {
+				responder = responderpkg.NewCodef(http.StatusOK, "healthy")
+				operation = "health-check"
+			} else {
+				responder = server.handleClusterGet(capturingResponseWriter, request)
+				operation = "cluster-get"
+			}
 		}
 	} else {
 		switch request.Method {

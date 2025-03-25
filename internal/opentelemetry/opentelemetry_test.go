@@ -8,7 +8,7 @@ import (
 )
 
 func TestInit(t *testing.T) {
-	opentelemetryDeinit, err := opentelemetry.Init(context.Background())
+	_, opentelemetryDeinit, err := opentelemetry.Init(context.Background())
 	require.NoError(t, err)
 	opentelemetryDeinit()
 }

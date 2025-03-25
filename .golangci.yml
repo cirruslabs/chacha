@@ -1,9 +1,9 @@
+version: 2
+
 run:
   timeout: 5m
 
 linters:
-  enable-all: true
-
   disable:
     # Pure insanity
     - exhaustruct
@@ -14,9 +14,6 @@ linters:
     - containedctx
 
     # We're not interested in formatting/sorting imports more than "go fmt" would do
-    - gci
-    - gofumpt
-    - goimports
 
     # We're not a publicly available package, so it's OK to have dynamic errors
     - err113
@@ -34,8 +31,8 @@ linters:
     - wrapcheck
     - tagliatelle
 
-    # Deprecated linters
-    - tenv
+    # Not all errors need to be checked
+    - errcheck
 
 linters-settings:
   funlen:
