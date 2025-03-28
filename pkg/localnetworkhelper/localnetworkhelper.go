@@ -153,5 +153,11 @@ func (localNetworkHelper *LocalNetworkHelper) PrivilegedDialContext(
 		return nil, err
 	}
 
+	// We can safely close the unixRights[0] now
+	// that it was dup(2)'ed by the net.FileConn
+	if err := unix.Close(unixRights[0]); err != nil {
+		return nil, err
+	}
+
 	return netConn, nil
 }
