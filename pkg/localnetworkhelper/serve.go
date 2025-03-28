@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 	"net"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -67,13 +68,13 @@ func Serve(ctx context.Context, fd int) error {
 		if err != nil {
 			privilegedSocketResponse.Error = err.Error()
 		} else {
-			var netFile *os.File
+			var syscallConn syscall.RawConn
 
 			switch typedNetConn := netConn.(type) {
 			case *net.TCPConn:
-				netFile, err = typedNetConn.File()
+				syscallConn, err = typedNetConn.SyscallConn()
 			case *net.UDPConn:
-				netFile, err = typedNetConn.File()
+				syscallConn, err = typedNetConn.SyscallConn()
 			default:
 				err = fmt.Errorf("unsupported net.Conn type: %T", netConn)
 			}
@@ -81,19 +82,29 @@ func Serve(ctx context.Context, fd int) error {
 				privilegedSocketResponse.Error = err.Error()
 			}
 
-			if netFile != nil {
-				oob = unix.UnixRights(int(netFile.Fd()))
+			if syscallConn != nil {
+				if err := syscallConn.Control(func(fd uintptr) {
+					oob = unix.UnixRights(int(fd))
+				}); err != nil {
+					privilegedSocketResponse.Error = err.Error()
+				}
 			}
 		}
 
 		privilegedSocketResponseJSONBytes, err := json.Marshal(privilegedSocketResponse)
 		if err != nil {
+			_ = netConn.Close()
+
 			return err
 		}
 
 		_, _, err = unixConn.WriteMsgUnix(privilegedSocketResponseJSONBytes, oob, nil)
 		if err != nil {
+			_ = netConn.Close()
+
 			return err
 		}
+
+		_ = netConn.Close()
 	}
 }
