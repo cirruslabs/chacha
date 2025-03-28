@@ -39,6 +39,19 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 		return nil, err
 	}
 
+	// Set FD_CLOEXEC to prevent file descriptor leakage to the child process
+	//
+	// Golang normally sets this flag when using higher-level OS functions,
+	// but this is not the case with unix/syscall packages.
+	//
+	// See https://github.com/golang/go/issues/37857#issuecomment-599174378 for more details.
+	if _, err := unix.FcntlInt(uintptr(socketPair[0]), unix.F_SETFD, unix.FD_CLOEXEC); err != nil {
+		return nil, fmt.Errorf("failed to set FD_CLOEXEC on a first socketpair(2) socket: %v", err)
+	}
+	if _, err := unix.FcntlInt(uintptr(socketPair[1]), unix.F_SETFD, unix.FD_CLOEXEC); err != nil {
+		return nil, fmt.Errorf("failed to set FD_CLOEXEC on a second socketpair(2) socket: %v", err)
+	}
+
 	// Launch our executable as a child process
 	//
 	// We're specifying the CommandName argument,
