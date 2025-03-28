@@ -77,6 +77,11 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 		return nil, err
 	}
 
+	// We can safely close the socketPair[1] now as it was inherited by the child
+	if err := unix.Close(socketPair[1]); err != nil {
+		return nil, err
+	}
+
 	go func() {
 		if err := cmd.Wait(); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
 			panic(err)
@@ -86,6 +91,11 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 	// Convert our end of the socketpair(2) to a *unix.Conn
 	conn, err := net.FileConn(os.NewFile(uintptr(socketPair[0]), ""))
 	if err != nil {
+		return nil, err
+	}
+
+	// We can safely close the socketPair[0] now as it was dup(2)'ed by the net.FileConn
+	if err := unix.Close(socketPair[0]); err != nil {
 		return nil, err
 	}
 
@@ -166,8 +176,7 @@ func (localNetworkHelper *LocalNetworkHelper) PrivilegedDialContext(
 		return nil, err
 	}
 
-	// We can safely close the unixRights[0] now
-	// that it was dup(2)'ed by the net.FileConn
+	// We can safely close the unixRights[0] now as it was dup(2)'ed by the net.FileConn
 	if err := unix.Close(unixRights[0]); err != nil {
 		return nil, err
 	}

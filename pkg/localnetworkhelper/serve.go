@@ -21,6 +21,11 @@ func Serve(fd int) error {
 		return err
 	}
 
+	// We can safely close the fd now as it was dup(2)'ed by the net.FileConn
+	if err := unix.Close(fd); err != nil {
+		return err
+	}
+
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {
 		return fmt.Errorf("expected *net.UnixConn, got %T", conn)
