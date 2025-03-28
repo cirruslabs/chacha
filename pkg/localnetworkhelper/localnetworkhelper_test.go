@@ -15,9 +15,11 @@ func TestMain(m *testing.M) {
 		if err := localnetworkhelper.Serve(context.Background(), 3); err != nil {
 			panic(err)
 		}
-	}
 
-	m.Run()
+		os.Exit(0)
+	} else {
+		os.Exit(m.Run())
+	}
 }
 
 func TestLocalNetworkHelper(t *testing.T) {
