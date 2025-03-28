@@ -11,6 +11,7 @@ import (
 	responderpkg "github.com/cirruslabs/chacha/internal/server/responder"
 	"github.com/cirruslabs/chacha/internal/server/rule"
 	"github.com/cirruslabs/chacha/internal/server/tlsinterceptor"
+	"github.com/cirruslabs/chacha/pkg/localnetworkhelper"
 	"github.com/im7mortal/kmutex"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
@@ -29,10 +30,11 @@ type Server struct {
 	kmutex     *kmutex.Kmutex
 	logger     *zap.SugaredLogger
 
-	disk           cachepkg.Cache
-	tlsInterceptor *tlsinterceptor.TLSInterceptor
-	rules          rule.Rules
-	cluster        *cluster.Cluster
+	disk               cachepkg.Cache
+	tlsInterceptor     *tlsinterceptor.TLSInterceptor
+	rules              rule.Rules
+	cluster            *cluster.Cluster
+	localNetworkHelper *localnetworkhelper.LocalNetworkHelper
 
 	// Metrics
 	requestsCounter       metric.Int64Counter

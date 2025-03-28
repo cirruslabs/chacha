@@ -9,15 +9,28 @@ import (
 )
 
 type KV struct {
-	node   string
-	secret string
+	node       string
+	secret     string
+	httpClient *http.Client
 }
 
-func New(node string, secret string) *KV {
-	return &KV{
+func New(node string, secret string, opts ...Option) *KV {
+	kv := &KV{
 		node:   node,
 		secret: secret,
 	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(kv)
+	}
+
+	// Apply defaults
+	if kv.httpClient == nil {
+		kv.httpClient = http.DefaultClient
+	}
+
+	return kv
 }
 
 func (kv *KV) Node() string {
@@ -44,7 +57,7 @@ func (kv *KV) Get(
 	}
 
 	// Perform request
-	response, err := http.DefaultClient.Do(request)
+	response, err := kv.httpClient.Do(request)
 	if err != nil {
 		return nil, cachepkg.Metadata{}, err
 	}
@@ -97,7 +110,7 @@ func (kv *KV) Put(
 	}
 
 	// Perform request
-	response, err := http.DefaultClient.Do(request)
+	response, err := kv.httpClient.Do(request)
 	if err != nil {
 		return err
 	}
