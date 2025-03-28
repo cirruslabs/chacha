@@ -78,7 +78,7 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 	}
 
 	go func() {
-		if err := cmd.Wait(); !errors.Is(ctx.Err(), context.Canceled) {
+		if err := cmd.Wait(); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
 			panic(err)
 		}
 	}()
