@@ -22,7 +22,7 @@ func NewCommand() *cobra.Command {
 			// >If non-nil, entry i becomes file descriptor 3+i.
 			//
 			// [1]: https://pkg.go.dev/os/exec#Cmd
-			return localnetworkhelper.Serve(cmd.Context(), 3)
+			return localnetworkhelper.Serve(3)
 		},
 	}
 	return cmd

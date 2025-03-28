@@ -1,7 +1,6 @@
 package localnetworkhelper
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,13 +9,12 @@ import (
 	"net"
 	"os"
 	"syscall"
-	"time"
 )
 
 // Serve implements a privileged component of the macOS "Local Network" permission helper.
 //
 // It listens for net.Dial requests, performs the dialing and sends the results back.
-func Serve(ctx context.Context, fd int) error {
+func Serve(fd int) error {
 	// Convert our end of the socketpair(2) to a *unix.Conn
 	conn, err := net.FileConn(os.NewFile(uintptr(fd), ""))
 	if err != nil {
@@ -32,29 +30,10 @@ func Serve(ctx context.Context, fd int) error {
 	buf := make([]byte, 4096)
 
 	for {
-		// Check for context cancellation
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			// Proceed with serving
-		}
-
-		// Do not block, periodically check for context cancellation
-		if err := unixConn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-			return err
-		}
-
 		n, err := unixConn.Read(buf)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
-			}
-
-			var netError net.Error
-
-			if errors.As(err, &netError) && netError.Timeout() {
-				continue
 			}
 
 			return err

@@ -12,7 +12,7 @@ import (
 
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == "localnetworkhelper" {
-		if err := localnetworkhelper.Serve(context.Background(), 3); err != nil {
+		if err := localnetworkhelper.Serve(3); err != nil {
 			panic(err)
 		}
 
