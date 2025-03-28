@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/unix"
+	"io"
 	"net"
 	"os"
 	"syscall"
@@ -46,6 +47,10 @@ func Serve(ctx context.Context, fd int) error {
 
 		n, err := unixConn.Read(buf)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+
 			var netError net.Error
 
 			if errors.As(err, &netError) && netError.Timeout() {
