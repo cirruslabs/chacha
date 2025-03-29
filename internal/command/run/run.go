@@ -9,6 +9,8 @@ import (
 	"github.com/cirruslabs/chacha/internal/server/cluster"
 	"github.com/cirruslabs/chacha/internal/server/rule"
 	"github.com/cirruslabs/chacha/internal/server/tlsinterceptor"
+	"github.com/cirruslabs/chacha/pkg/localnetworkhelper"
+	"github.com/cirruslabs/chacha/pkg/privdrop"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -16,6 +18,7 @@ import (
 )
 
 var configPath string
+var username string
 
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -26,11 +29,32 @@ func NewCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&configPath, "file", "f", "",
 		"configuration file path (e.g. /etc/chacha.yml)")
+	cmd.Flags().StringVar(&username, "user", "",
+		"username to drop privileges to")
 
 	return cmd
 }
 
 func run(cmd *cobra.Command, _ []string) error {
+	opts := []serverpkg.Option{
+		serverpkg.WithLogger(zap.S()),
+	}
+
+	// Run the macOS "Local Network" permission helper
+	// when privilege dropping is requested
+	if username != "" {
+		localNetworkHelper, err := localnetworkhelper.New(cmd.Context())
+		if err != nil {
+			return err
+		}
+
+		opts = append(opts, serverpkg.WithLocalNetworkHelper(localNetworkHelper))
+
+		if err := privdrop.Drop(username); err != nil {
+			return err
+		}
+	}
+
 	if configPath == "" {
 		return fmt.Errorf("configuration file path (-f or --file) needs to be specified")
 	}
@@ -44,10 +68,6 @@ func run(cmd *cobra.Command, _ []string) error {
 	config, err := configpkg.Parse(bytes.NewReader(configBytes))
 	if err != nil {
 		return fmt.Errorf("failed to parse configuration file at path %s: %w", configPath, err)
-	}
-
-	opts := []serverpkg.Option{
-		serverpkg.WithLogger(zap.S()),
 	}
 
 	if config.Disk != nil {

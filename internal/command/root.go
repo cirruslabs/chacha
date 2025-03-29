@@ -1,6 +1,7 @@
 package command
 
 import (
+	"github.com/cirruslabs/chacha/internal/command/localnetworkhelper"
 	"github.com/cirruslabs/chacha/internal/command/run"
 	"github.com/cirruslabs/chacha/internal/logginglevel"
 	"github.com/cirruslabs/chacha/internal/version"
@@ -30,6 +31,7 @@ func NewRootCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		run.NewCommand(),
+		localnetworkhelper.NewCommand(),
 	)
 
 	return cmd

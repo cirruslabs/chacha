@@ -221,7 +221,19 @@ func (server *Server) cacheKey(request *http.Request) string {
 func (server *Server) cache(key string) cachepkg.Cache {
 	if cluster := server.cluster; cluster != nil {
 		if targetNode := cluster.TargetNode(key); targetNode != cluster.LocalNode() {
-			return kv.New(targetNode, cluster.Secret())
+			var kvOpts []kv.Option
+
+			if server.localNetworkHelper != nil {
+				httpClient := &http.Client{
+					Transport: &http.Transport{
+						DialContext: server.localNetworkHelper.PrivilegedDialContext,
+					},
+				}
+
+				kvOpts = append(kvOpts, kv.WithHTTPClient(httpClient))
+			}
+
+			return kv.New(targetNode, cluster.Secret(), kvOpts...)
 		}
 	}
 

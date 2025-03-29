@@ -5,6 +5,7 @@ import (
 	"github.com/cirruslabs/chacha/internal/server/cluster"
 	"github.com/cirruslabs/chacha/internal/server/rule"
 	"github.com/cirruslabs/chacha/internal/server/tlsinterceptor"
+	"github.com/cirruslabs/chacha/pkg/localnetworkhelper"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +32,12 @@ func WithRules(rules rule.Rules) Option {
 func WithCluster(cluster *cluster.Cluster) Option {
 	return func(server *Server) {
 		server.cluster = cluster
+	}
+}
+
+func WithLocalNetworkHelper(localNetworkHelper *localnetworkhelper.LocalNetworkHelper) Option {
+	return func(server *Server) {
+		server.localNetworkHelper = localNetworkHelper
 	}
 }
 
