@@ -16,13 +16,15 @@ import (
 // It listens for net.Dial requests, performs the dialing and sends the results back.
 func Serve(fd int) error {
 	// Convert our end of the socketpair(2) to a *unix.Conn
-	conn, err := net.FileConn(os.NewFile(uintptr(fd), ""))
+	file := os.NewFile(uintptr(fd), "")
+
+	conn, err := net.FileConn(file)
 	if err != nil {
 		return err
 	}
 
 	// We can safely close the fd now as it was dup(2)'ed by the net.FileConn
-	if err := unix.Close(fd); err != nil {
+	if err := file.Close(); err != nil {
 		return err
 	}
 
