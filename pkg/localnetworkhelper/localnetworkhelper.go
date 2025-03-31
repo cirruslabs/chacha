@@ -64,8 +64,10 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 
 	cmd := exec.CommandContext(ctx, executable, CommandName)
 
+	extraFile := os.NewFile(uintptr(socketPair[1]), "")
+
 	cmd.ExtraFiles = []*os.File{
-		os.NewFile(uintptr(socketPair[1]), ""),
+		extraFile,
 	}
 
 	cmd.Stdout = os.Stdout
@@ -78,7 +80,7 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 	}
 
 	// We can safely close the socketPair[1] now as it was inherited by the child
-	if err := unix.Close(socketPair[1]); err != nil {
+	if err := extraFile.Close(); err != nil {
 		return nil, err
 	}
 
@@ -89,13 +91,15 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 	}()
 
 	// Convert our end of the socketpair(2) to a *unix.Conn
-	conn, err := net.FileConn(os.NewFile(uintptr(socketPair[0]), ""))
+	file := os.NewFile(uintptr(socketPair[0]), "")
+
+	conn, err := net.FileConn(file)
 	if err != nil {
 		return nil, err
 	}
 
 	// We can safely close the socketPair[0] now as it was dup(2)'ed by the net.FileConn
-	if err := unix.Close(socketPair[0]); err != nil {
+	if err := file.Close(); err != nil {
 		return nil, err
 	}
 
@@ -177,7 +181,7 @@ func (localNetworkHelper *LocalNetworkHelper) PrivilegedDialContext(
 	}
 
 	// We can safely close the unixRights[0] now as it was dup(2)'ed by the net.FileConn
-	if err := unix.Close(unixRights[0]); err != nil {
+	if err := netFile.Close(); err != nil {
 		return nil, err
 	}
 
