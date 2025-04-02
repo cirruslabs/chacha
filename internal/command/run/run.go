@@ -43,10 +43,11 @@ func run(cmd *cobra.Command, _ []string) error {
 	// Run the macOS "Local Network" permission helper
 	// when privilege dropping is requested
 	if username != "" {
-		localNetworkHelper, err := localnetworkhelper.New(cmd.Context())
+		localNetworkHelper, err := localnetworkhelper.New(cmd.Context(), "", "chacha-*")
 		if err != nil {
 			return err
 		}
+		defer localNetworkHelper.Close()
 
 		opts = append(opts, serverpkg.WithLocalNetworkHelper(localNetworkHelper))
 

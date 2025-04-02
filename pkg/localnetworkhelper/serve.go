@@ -18,7 +18,7 @@ func Serve(fd int) error {
 	// Convert our end of the socketpair(2) to a *unix.Conn
 	file := os.NewFile(uintptr(fd), "")
 
-	conn, err := net.FileConn(file)
+	conn, err := net.FileListener(file)
 	if err != nil {
 		return err
 	}
@@ -28,74 +28,81 @@ func Serve(fd int) error {
 		return err
 	}
 
-	unixConn, ok := conn.(*net.UnixConn)
+	unixListener, ok := conn.(*net.UnixListener)
 	if !ok {
 		return fmt.Errorf("expected *net.UnixConn, got %T", conn)
 	}
 
 	// Serve requests
+	for {
+		unixConn, err := unixListener.AcceptUnix()
+		if err != nil {
+			return err
+		}
+
+		go handle(unixConn)
+	}
+}
+
+func handle(unixConn *net.UnixConn) error {
 	buf := make([]byte, 4096)
 
-	for {
-		n, err := unixConn.Read(buf)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-
-			return err
+	n, err := unixConn.Read(buf)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
 		}
 
-		var privilegedSocketRequest PrivilegedSocketRequest
+		return err
+	}
 
-		if err := json.Unmarshal(buf[:n], &privilegedSocketRequest); err != nil {
-			return err
+	var privilegedSocketRequest PrivilegedSocketRequest
+
+	if err := json.Unmarshal(buf[:n], &privilegedSocketRequest); err != nil {
+		return err
+	}
+
+	var privilegedSocketResponse PrivilegedSocketResponse
+	var oob []byte
+
+	netConn, err := net.Dial(privilegedSocketRequest.Network, privilegedSocketRequest.Addr)
+	if err != nil {
+		privilegedSocketResponse.Error = err.Error()
+	} else {
+		defer netConn.Close()
+
+		var syscallConn syscall.RawConn
+
+		switch typedNetConn := netConn.(type) {
+		case *net.TCPConn:
+			syscallConn, err = typedNetConn.SyscallConn()
+		case *net.UDPConn:
+			syscallConn, err = typedNetConn.SyscallConn()
+		default:
+			err = fmt.Errorf("unsupported net.Conn type: %T", netConn)
 		}
-
-		var privilegedSocketResponse PrivilegedSocketResponse
-		var oob []byte
-
-		netConn, err := net.Dial(privilegedSocketRequest.Network, privilegedSocketRequest.Addr)
 		if err != nil {
 			privilegedSocketResponse.Error = err.Error()
-		} else {
-			var syscallConn syscall.RawConn
+		}
 
-			switch typedNetConn := netConn.(type) {
-			case *net.TCPConn:
-				syscallConn, err = typedNetConn.SyscallConn()
-			case *net.UDPConn:
-				syscallConn, err = typedNetConn.SyscallConn()
-			default:
-				err = fmt.Errorf("unsupported net.Conn type: %T", netConn)
-			}
-			if err != nil {
+		if syscallConn != nil {
+			if err := syscallConn.Control(func(fd uintptr) {
+				oob = unix.UnixRights(int(fd))
+			}); err != nil {
 				privilegedSocketResponse.Error = err.Error()
 			}
-
-			if syscallConn != nil {
-				if err := syscallConn.Control(func(fd uintptr) {
-					oob = unix.UnixRights(int(fd))
-				}); err != nil {
-					privilegedSocketResponse.Error = err.Error()
-				}
-			}
 		}
-
-		privilegedSocketResponseJSONBytes, err := json.Marshal(privilegedSocketResponse)
-		if err != nil {
-			_ = netConn.Close()
-
-			return err
-		}
-
-		_, _, err = unixConn.WriteMsgUnix(privilegedSocketResponseJSONBytes, oob, nil)
-		if err != nil {
-			_ = netConn.Close()
-
-			return err
-		}
-
-		_ = netConn.Close()
 	}
+
+	privilegedSocketResponseJSONBytes, err := json.Marshal(privilegedSocketResponse)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = unixConn.WriteMsgUnix(privilegedSocketResponseJSONBytes, oob, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
