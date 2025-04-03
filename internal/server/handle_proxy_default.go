@@ -111,7 +111,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 	server.logger.Debugf("upstream request: %+v", upstreamRequest)
 
 	// Perform an upstream request
-	upstreamResponse, err := http.DefaultClient.Do(upstreamRequest)
+	upstreamResponse, err := server.httpClient.Do(upstreamRequest)
 	if err != nil {
 		return responder.NewCodef(http.StatusInternalServerError, "failed to perform a request "+
 			"to the upstream: %v", err)

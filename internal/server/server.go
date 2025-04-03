@@ -27,6 +27,7 @@ import (
 type Server struct {
 	listener   net.Listener
 	httpServer *http.Server
+	httpClient *http.Client
 	kmutex     *kmutex.Kmutex
 	logger     *zap.SugaredLogger
 
@@ -44,6 +45,11 @@ type Server struct {
 
 func New(addr string, opts ...Option) (*Server, error) {
 	server := &Server{
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				DisableCompression: true,
+			},
+		},
 		kmutex: kmutex.New(),
 	}
 
