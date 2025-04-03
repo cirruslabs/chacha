@@ -1,3 +1,5 @@
+//go:build darwin
+
 package localnetworkhelper
 
 import (
@@ -45,6 +47,18 @@ func Serve(fd int) error {
 }
 
 func handle(unixConn *net.UnixConn) error {
+	// Ensure that the remote is our parent
+	peerPID, err := getPeerPID(unixConn)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve peer's PID: %w, "+
+			"refusing to dial", err)
+	}
+
+	if peerPID != os.Getppid() {
+		return fmt.Errorf("peer's PID %d is different than our parent PID %d, "+
+			"refusing to dial", peerPID, os.Getppid())
+	}
+
 	buf := make([]byte, 4096)
 
 	n, err := unixConn.Read(buf)
@@ -105,4 +119,21 @@ func handle(unixConn *net.UnixConn) error {
 	}
 
 	return nil
+}
+
+func getPeerPID(unixConn *net.UnixConn) (int, error) {
+	syscallConn, err := unixConn.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+
+	var pid int
+
+	if err := syscallConn.Control(func(fd uintptr) {
+		pid, err = unix.GetsockoptInt(int(fd), unix.SOL_LOCAL, unix.LOCAL_PEERPID)
+	}); err != nil {
+		return 0, err
+	}
+
+	return pid, nil
 }

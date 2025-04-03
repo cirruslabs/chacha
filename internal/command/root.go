@@ -29,10 +29,15 @@ func NewRootCommand() *cobra.Command {
 
 	cmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
 
-	cmd.AddCommand(
+	commands := []*cobra.Command{
 		run.NewCommand(),
-		localnetworkhelper.NewCommand(),
-	)
+	}
+
+	if localNetworkHelperCommand := localnetworkhelper.NewCommand(); localNetworkHelperCommand != nil {
+		commands = append(commands, localNetworkHelperCommand)
+	}
+
+	cmd.AddCommand(commands...)
 
 	return cmd
 }

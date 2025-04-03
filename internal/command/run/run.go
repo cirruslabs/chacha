@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"os"
+	"runtime"
 )
 
 var configPath string
@@ -29,8 +30,11 @@ func NewCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&configPath, "file", "f", "",
 		"configuration file path (e.g. /etc/chacha.yml)")
-	cmd.Flags().StringVar(&username, "user", "",
-		"username to drop privileges to")
+
+	if runtime.GOOS == "darwin" {
+		cmd.Flags().StringVar(&username, "user", "",
+			"username to drop privileges to")
+	}
 
 	return cmd
 }
