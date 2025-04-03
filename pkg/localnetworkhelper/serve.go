@@ -11,6 +11,11 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
+)
+
+const (
+	remoteTimeout = 5 * time.Second
 )
 
 // Serve implements a privileged component of the macOS "Local Network" permission helper.
@@ -42,7 +47,22 @@ func Serve(fd int) error {
 			return err
 		}
 
-		go handle(unixConn)
+		go func() {
+			if err := handle(unixConn); err != nil {
+				_ = unixConn.Close()
+			}
+
+			// Wait for the remote to read the response and close the connection
+			if err := unixConn.SetReadDeadline(time.Now().Add(remoteTimeout)); err != nil {
+				_ = unixConn.Close()
+			}
+
+			buf := make([]byte, 4096)
+
+			_, _ = unixConn.Read(buf)
+
+			_ = unixConn.Close()
+		}()
 	}
 }
 
