@@ -17,6 +17,23 @@ import (
 
 //nolint:cyclop,funlen // not sure if chopping this function will make the matters easier
 func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *http.Request) responder.Responder {
+	// From http.Request's URL field documentation:
+	//
+	// >For most requests, fields other than Path and RawQuery will be empty.
+	//
+	// So, we fix this by adding fields necessary to perform the upstream request.
+	if request.TLS != nil {
+		request.URL.Scheme = "https"
+	} else {
+		request.URL.Scheme = "http"
+	}
+
+	if request.Host != "" {
+		request.URL.Host = request.Host
+	} else {
+		return responder.NewCodef(http.StatusBadRequest, "Host header is empty")
+	}
+
 	// Determine the cache key
 	key := server.cacheKey(request)
 
@@ -50,23 +67,6 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		defer func() {
 			_ = cacheEntryReader.Close()
 		}()
-	}
-
-	// From http.Request's URL field documentation:
-	//
-	// >For most requests, fields other than Path and RawQuery will be empty.
-	//
-	// So, we fix this by adding fields necessary to perform the upstream request.
-	if request.TLS != nil {
-		request.URL.Scheme = "https"
-	} else {
-		request.URL.Scheme = "http"
-	}
-
-	if request.Host != "" {
-		request.URL.Host = request.Host
-	} else {
-		return responder.NewCodef(http.StatusBadRequest, "Host header is empty")
 	}
 
 	// Always perform an upstream request in order to guarantee that
