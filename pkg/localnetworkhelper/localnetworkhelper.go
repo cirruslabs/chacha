@@ -42,7 +42,7 @@ func New(ctx context.Context, dir string, pattern string) (*LocalNetworkHelper, 
 	}
 
 	if err := os.Chmod(socketDir, 0755); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to set permissions on socket directory: %w", err)
 	}
 
 	unixSocket, err := net.ListenUnix("unix", &net.UnixAddr{
@@ -53,7 +53,7 @@ func New(ctx context.Context, dir string, pattern string) (*LocalNetworkHelper, 
 	}
 
 	if err := os.Chmod(filepath.Join(socketDir, socketName), 0777); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to set permissions on socket: %w", err)
 	}
 
 	// Launch our executable as a child process
