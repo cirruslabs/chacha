@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"os"
-	"runtime"
 )
 
 var configPath string
@@ -30,11 +29,8 @@ func NewCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&configPath, "file", "f", "",
 		"configuration file path (e.g. /etc/chacha.yml)")
-
-	if runtime.GOOS == "darwin" {
-		cmd.Flags().StringVar(&username, "user", "",
-			"username to drop privileges to")
-	}
+	cmd.Flags().StringVar(&username, "user", "",
+		"username to drop privileges to")
 
 	return cmd
 }
@@ -47,11 +43,10 @@ func run(cmd *cobra.Command, _ []string) error {
 	// Run the macOS "Local Network" permission helper
 	// when privilege dropping is requested
 	if username != "" {
-		localNetworkHelper, err := localnetworkhelper.New(cmd.Context(), "", "chacha-*")
+		localNetworkHelper, err := localnetworkhelper.New(cmd.Context())
 		if err != nil {
 			return err
 		}
-		defer localNetworkHelper.Close()
 
 		opts = append(opts, serverpkg.WithLocalNetworkHelper(localNetworkHelper))
 
