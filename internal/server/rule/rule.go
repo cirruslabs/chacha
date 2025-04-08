@@ -27,26 +27,20 @@ func New(pattern string, ignoreAuthorizationHeader bool, ignoreParameters []stri
 	}, nil
 }
 
-func (rules Rules) IgnoreAuthorizationHeader(url string) bool {
-	for _, rule := range rules {
-		if !rule.re.MatchString(url) {
-			continue
-		}
-
-		return rule.ignoreAuthorizationHeader
-	}
-
-	return false
+func (rule Rule) IgnoreAuthorizationHeader() bool {
+	return rule.ignoreAuthorizationHeader
 }
 
-func (rules Rules) IgnoredParamters(url string) []string {
-	for _, rule := range rules {
-		if !rule.re.MatchString(url) {
-			continue
-		}
+func (rule Rule) IgnoredParameters() []string {
+	return rule.ignoreParameters
+}
 
-		return rule.ignoreParameters
+func (rules Rules) Get(url string) *Rule {
+	for _, rule := range rules {
+		if rule.re.MatchString(url) {
+			return &rule
+		}
 	}
 
-	return []string{}
+	return nil
 }
