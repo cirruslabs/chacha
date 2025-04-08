@@ -6,6 +6,7 @@ import (
 	cachepkg "github.com/cirruslabs/chacha/internal/cache"
 	"github.com/cirruslabs/chacha/internal/cache/kv"
 	"github.com/cirruslabs/chacha/internal/server/responder"
+	rulepkg "github.com/cirruslabs/chacha/internal/server/rule"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"io"
@@ -34,8 +35,11 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		return responder.NewCodef(http.StatusBadRequest, "Host header is empty")
 	}
 
+	// Determine our caching policy for this request
+	rule := server.rules.Get(request.URL.String())
+
 	// Determine the cache key
-	key := server.cacheKey(request)
+	key := server.cacheKey(request, rule)
 
 	// Prevent multiple in-flight proxy requests to the same key,
 	// otherwise we may needlessly fetch the content twice
@@ -128,7 +132,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 	server.logger.Debugf("upstream response: %v", upstreamResponse)
 
 	switch {
-	case upstreamResponse.StatusCode == http.StatusOK && server.shouldCache(request, upstreamResponse):
+	case upstreamResponse.StatusCode == http.StatusOK && server.shouldCache(request, upstreamResponse, rule):
 		// Our cache entry is outdated and caching is allowed, refresh cache entry contents
 		teeReader := io.TeeReader(upstreamResponse.Body, writer)
 
@@ -193,7 +197,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 	}
 }
 
-func (server *Server) cacheKey(request *http.Request) string {
+func (server *Server) cacheKey(request *http.Request, rule *rulepkg.Rule) string {
 	scheme := "http"
 
 	if request.TLS != nil {
@@ -202,9 +206,9 @@ func (server *Server) cacheKey(request *http.Request) string {
 
 	query := request.URL.Query()
 
-	if ignoredParamters := server.rules.IgnoredParamters(request.URL.String()); len(ignoredParamters) > 0 {
-		for _, ignoredParamter := range ignoredParamters {
-			query.Del(ignoredParamter)
+	if rule != nil {
+		for _, ignoredParameter := range rule.IgnoredParameters() {
+			query.Del(ignoredParameter)
 		}
 	}
 
@@ -240,7 +244,11 @@ func (server *Server) cache(key string) cachepkg.Cache {
 	return server.disk
 }
 
-func (server *Server) shouldCache(request *http.Request, response *http.Response) bool {
+func (server *Server) shouldCache(request *http.Request, response *http.Response, rule *rulepkg.Rule) bool {
+	if rule == nil {
+		return false
+	}
+
 	if request.Method != http.MethodGet {
 		return false
 	}
@@ -259,7 +267,7 @@ func (server *Server) shouldCache(request *http.Request, response *http.Response
 
 	if request.Header.Get("Authorization") != "" &&
 		!cacheControlExplicitlyAllows(response.Header.Values("Cache-Control")) &&
-		!server.rules.IgnoreAuthorizationHeader(request.URL.String()) {
+		!rule.IgnoreAuthorizationHeader() {
 		return false
 	}
 

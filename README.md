@@ -15,7 +15,8 @@ Chacha tries to build on:
 With the following exceptions:
 
 * Chacha is always validating: latency is traded for simplicity and security
-* For certain URLs, [you can specify `rules`](#rules-rules-optional) to override the default standard-like behavior, for example, you can:
+* Chacha will only consider caching of the URLs if it matches at least one entry in [`rules`](#rules-rules-optional)
+* [`rules`](#rules-rules-optional) allow to override the default standards-like behavior, for example, you can:
   * ignore the existence of `Authorization` header in the request for caching purposes
   * skip certain URL parameters (e.g. `X-Amz-Date` in S3 pre-signed URLs) from the cache key for caching purposes
 
@@ -79,7 +80,7 @@ tls-interceptor:
 
 ### Rules (`rules`, optional)
 
-Offers an escape hatch for violating RFC specifications for certain URLs.
+Defines URLs to consider caching and offers an escape hatch for violating RFC specifications for these URLs.
 
 #### Structure
 
