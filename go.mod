@@ -1,8 +1,8 @@
 module github.com/cirruslabs/chacha
 
-go 1.23.0
+go 1.24
 
-toolchain go1.23.5
+toolchain go1.24.2
 
 require (
 	github.com/dustin/go-humanize v1.0.1
@@ -10,6 +10,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/im7mortal/kmutex v1.0.2
 	github.com/nspcc-dev/hrw/v2 v2.0.3
+	github.com/puzpuzpuz/xsync/v4 v4.0.0
 	github.com/samber/lo v1.39.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.10.0

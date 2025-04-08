@@ -1,39 +1,65 @@
 package localnetworkhelper
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/puzpuzpuz/xsync/v4"
 	"golang.org/x/sys/unix"
+	"io"
 	"net"
 	"os"
 	"os/exec"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const CommandName = "localnetworkhelper"
 
 type PrivilegedSocketRequest struct {
+	Token   string `json:"token"`
 	Network string `json:"network"`
 	Addr    string `json:"addr"`
 }
 
 type PrivilegedSocketResponse struct {
+	Token string `json:"token"`
 	Error string `json:"error"`
 }
 
-type LocalNetworkHelper struct {
-	unixConn *net.UnixConn
+type Request struct {
+	Network string
+	Addr    string
+	ReplyCh chan Reply
+}
 
-	mtx sync.Mutex
+type Reply struct {
+	Conn net.Conn
+	Err  error
+}
+
+type LocalNetworkHelper struct {
+	unixConn            *net.UnixConn
+	requestsUnprocessed chan Request
+	requestsProcessed   *xsync.Map[string, Request]
+	err                 atomic.Pointer[error]
 }
 
 // New starts a privileged part of the macOS "Local Network" permission
 // helper as a child process and enables communication with it.
 func New(ctx context.Context) (*LocalNetworkHelper, error) {
+	localNetworkHelper := &LocalNetworkHelper{
+		requestsUnprocessed: make(chan Request),
+		requestsProcessed:   xsync.NewMap[string, Request](),
+	}
+
 	// Create a socketpair(2) for communicating with the helper process
+	//
+	// We could've used datagram socket to simplify message boundary handling,
+	// but that would make the connection close detection impossible.
 	socketPair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
 	if err != nil {
 		return nil, err
@@ -86,7 +112,7 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 
 	go func() {
 		if err := cmd.Wait(); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
-			panic(err)
+			localNetworkHelper.err.CompareAndSwap(nil, &err)
 		}
 	}()
 
@@ -107,10 +133,12 @@ func New(ctx context.Context) (*LocalNetworkHelper, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected *net.UnixConn, got %T", conn)
 	}
+	localNetworkHelper.unixConn = unixConn
 
-	return &LocalNetworkHelper{
-		unixConn: unixConn,
-	}, nil
+	go localNetworkHelper.handleRequests()
+	go localNetworkHelper.handleResponses()
+
+	return localNetworkHelper, nil
 }
 
 func (localNetworkHelper *LocalNetworkHelper) PrivilegedDialContext(
@@ -118,46 +146,123 @@ func (localNetworkHelper *LocalNetworkHelper) PrivilegedDialContext(
 	network string,
 	addr string,
 ) (net.Conn, error) {
-	// Prevent concurrency to avoid intermixing requests and responses
-	localNetworkHelper.mtx.Lock()
-	defer localNetworkHelper.mtx.Unlock()
+	// Check for global local network error first
+	if err := localNetworkHelper.err.Load(); err != nil {
+		return nil, *err
+	}
 
-	privilegedSocketRequest := PrivilegedSocketRequest{
+	replyCh := make(chan Reply, 1)
+
+	localNetworkHelper.requestsUnprocessed <- Request{
 		Network: network,
 		Addr:    addr,
+		ReplyCh: replyCh,
 	}
 
-	privilegedSocketRequestJSONBytes, err := json.Marshal(&privilegedSocketRequest)
-	if err != nil {
-		return nil, err
+	select {
+	case reply := <-replyCh:
+		return reply.Conn, reply.Err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
+}
 
-	_, err = localNetworkHelper.unixConn.Write(privilegedSocketRequestJSONBytes)
-	if err != nil {
-		return nil, err
+func (localNetworkHelper *LocalNetworkHelper) handleRequests() {
+	for request := range localNetworkHelper.requestsUnprocessed {
+		privilegedSocketRequest := PrivilegedSocketRequest{
+			Token:   uuid.New().String(),
+			Network: request.Network,
+			Addr:    request.Addr,
+		}
+
+		privilegedSocketRequestJSONBytes, err := json.Marshal(&privilegedSocketRequest)
+		if err != nil {
+			request.ReplyCh <- Reply{
+				Err: fmt.Errorf("failed to marshal privileged socket request: %v", err),
+			}
+
+			continue
+		}
+
+		// We need mark the request as processed before we send it,
+		// otherwise the handleResponses() will trip up because it
+		// won't be able to find this request
+		localNetworkHelper.requestsProcessed.Store(privilegedSocketRequest.Token, request)
+
+		_, err = localNetworkHelper.unixConn.Write(privilegedSocketRequestJSONBytes)
+		if err != nil {
+			// Unmark the request as processed because send failed
+			localNetworkHelper.requestsProcessed.Delete(privilegedSocketRequest.Token)
+
+			request.ReplyCh <- Reply{
+				Err: fmt.Errorf("failed to send privileged socket request: %v", err),
+			}
+		}
 	}
+}
 
+func (localNetworkHelper *LocalNetworkHelper) handleResponses() {
 	buf := make([]byte, 4096)
 	oob := make([]byte, 4096)
 
-	n, oobn, _, _, err := localNetworkHelper.unixConn.ReadMsgUnix(buf, oob)
-	if err != nil {
-		return nil, err
+	for {
+		n, oobn, _, _, err := localNetworkHelper.unixConn.ReadMsgUnix(buf, oob)
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+
+			err = fmt.Errorf("failed to read from the local network helper: %w", err)
+
+			localNetworkHelper.err.CompareAndSwap(nil, &err)
+
+			return
+		}
+
+		// Parse response(s)
+		decoder := json.NewDecoder(bytes.NewReader(buf[:n]))
+
+		for {
+			var privilegedSocketResponse PrivilegedSocketResponse
+
+			if err := decoder.Decode(&privilegedSocketResponse); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+
+				err = fmt.Errorf("failed to unmarshal privileged socket response: %w", err)
+
+				localNetworkHelper.err.CompareAndSwap(nil, &err)
+
+				return
+			}
+
+			processedRequest, ok := localNetworkHelper.requestsProcessed.LoadAndDelete(privilegedSocketResponse.Token)
+			if !ok {
+				err := fmt.Errorf("got response for a non-existent request %q", privilegedSocketResponse.Token)
+
+				localNetworkHelper.err.CompareAndSwap(nil, &err)
+
+				return
+			}
+
+			netConn, err := handleResponse(privilegedSocketResponse, oob, oobn)
+			processedRequest.ReplyCh <- Reply{
+				Conn: netConn,
+				Err:  err,
+			}
+		}
 	}
+}
 
-	var privilegedSocketResponse PrivilegedSocketResponse
-
-	if err := json.Unmarshal(buf[:n], &privilegedSocketResponse); err != nil {
-		return nil, err
-	}
-
+func handleResponse(privilegedSocketResponse PrivilegedSocketResponse, oob []byte, oobn int) (net.Conn, error) {
 	if privilegedSocketResponse.Error != "" {
 		return nil, fmt.Errorf("%s", privilegedSocketResponse.Error)
 	}
 
 	socketControlMessages, err := unix.ParseSocketControlMessage(oob[:oobn])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse socket control message: %w", err)
 	}
 
 	if len(socketControlMessages) != 1 {
@@ -177,13 +282,19 @@ func (localNetworkHelper *LocalNetworkHelper) PrivilegedDialContext(
 
 	netConn, err := net.FileConn(netFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to convert netFile to netConn: %w", err)
 	}
 
-	// We can safely close the unixRights[0] now as it was dup(2)'ed by the net.FileConn
+	// We can safely close the netFile now as it was dup(2)'ed by the net.FileConn
 	if err := netFile.Close(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to close netFile: %w", err)
 	}
 
 	return netConn, nil
+}
+
+func (localNetworkHelper *LocalNetworkHelper) Close() error {
+	close(localNetworkHelper.requestsUnprocessed)
+
+	return localNetworkHelper.unixConn.Close()
 }
