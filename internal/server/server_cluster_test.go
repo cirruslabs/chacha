@@ -8,6 +8,7 @@ import (
 	"github.com/cirruslabs/chacha/internal/config"
 	"github.com/cirruslabs/chacha/internal/server"
 	"github.com/cirruslabs/chacha/internal/server/cluster"
+	"github.com/cirruslabs/chacha/internal/server/rule"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,13 @@ func TestCluster(t *testing.T) {
 	logger := zap.Must(zap.NewDevelopment())
 
 	// Configure first Chacha node, in cluster, without a disk
+	catchAllRule, err := rule.New(".*", false, []string{})
+	require.NoError(t, err)
+
 	firstOpts := []server.Option{
+		server.WithRules(rule.Rules{
+			catchAllRule,
+		}),
 		server.WithCluster(
 			cluster.New(
 				secret,
