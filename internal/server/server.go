@@ -40,7 +40,7 @@ type Server struct {
 	// Metrics
 	requestsCounter       metric.Int64Counter
 	cacheOperationCounter metric.Int64Counter
-	cacheSpeedHistogram   metric.Int64Histogram
+	cacheTransferCounter  metric.Int64Counter
 }
 
 func New(addr string, opts ...Option) (*Server, error) {
@@ -116,8 +116,8 @@ func New(addr string, opts ...Option) (*Server, error) {
 		return nil, err
 	}
 
-	server.cacheSpeedHistogram, err = opentelemetry.DefaultMeter.Int64Histogram(
-		"org.cirruslabs.chacha.cache.speed_bytes_per_second",
+	server.cacheTransferCounter, err = opentelemetry.DefaultMeter.Int64Counter(
+		"org.cirruslabs.chacha.cache.transfer_bytes",
 	)
 	if err != nil {
 		return nil, err

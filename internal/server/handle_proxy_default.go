@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 //nolint:cyclop,funlen // not sure if chopping this function will make the matters easier
@@ -150,13 +149,16 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 			attribute.String("type", "miss"),
 		))
 
+		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		server.cacheTransferCounter.Add(context.Background(), upstreamResponse.ContentLength, metric.WithAttributes(
+			attribute.String("type", "miss"),
+		))
+
 		return responder.NewEmptyf("fetched from the upstream, cache entry is outdated")
 	case upstreamResponse.StatusCode == http.StatusNotModified && cacheEntryReader != nil:
 		// Our cached entry is up-to-date, return cache entry contents
 
 		writer.WriteHeader(http.StatusOK)
-
-		copyStartAt := time.Now()
 
 		n, err := io.Copy(writer, cacheEntryReader)
 		if err != nil {
@@ -170,11 +172,9 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 			attribute.String("type", "hit"),
 		))
 
-		bytesPerSecond := float64(n) / max(time.Since(copyStartAt).Seconds(), 1)
-
 		//nolint:contextcheck // can's use request.Context() here because it might be canceled
-		server.cacheSpeedHistogram.Record(context.Background(), int64(bytesPerSecond), metric.WithAttributes(
-			attribute.String("type", "serve"),
+		server.cacheTransferCounter.Add(context.Background(), n, metric.WithAttributes(
+			attribute.String("type", "hit"),
 		))
 
 		return responder.NewEmptyf("retrieved from the cache")
