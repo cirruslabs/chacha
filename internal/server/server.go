@@ -25,11 +25,12 @@ import (
 )
 
 type Server struct {
-	listener   net.Listener
-	httpServer *http.Server
-	httpClient *http.Client
-	kmutex     *kmutex.Kmutex
-	logger     *zap.SugaredLogger
+	listener           net.Listener
+	httpServer         *http.Server
+	internalHTTPClient *http.Client
+	externalHTTPClient *http.Client
+	kmutex             *kmutex.Kmutex
+	logger             *zap.SugaredLogger
 
 	disk               cachepkg.Cache
 	tlsInterceptor     *tlsinterceptor.TLSInterceptor
@@ -45,7 +46,8 @@ type Server struct {
 
 func New(addr string, opts ...Option) (*Server, error) {
 	server := &Server{
-		httpClient: &http.Client{
+		internalHTTPClient: http.DefaultClient,
+		externalHTTPClient: &http.Client{
 			Transport: &http.Transport{
 				DisableCompression: true,
 			},
@@ -100,6 +102,15 @@ func New(addr string, opts ...Option) (*Server, error) {
 
 		if port == 0 {
 			return nil, fmt.Errorf("port in addr %q cannot be zero when using cluster mode", addr)
+		}
+	}
+
+	// Use a customized internal HTTP client when "Local Network" permission helper is enabled
+	if server.localNetworkHelper != nil {
+		server.internalHTTPClient = &http.Client{
+			Transport: &http.Transport{
+				DialContext: server.localNetworkHelper.PrivilegedDialContext,
+			},
 		}
 	}
 
