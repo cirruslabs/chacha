@@ -115,7 +115,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 	server.logger.Debugf("upstream request: %+v", upstreamRequest)
 
 	// Perform an upstream request
-	upstreamResponse, err := server.httpClient.Do(upstreamRequest)
+	upstreamResponse, err := server.externalHTTPClient.Do(upstreamRequest)
 	if err != nil {
 		return responder.NewCodef(http.StatusInternalServerError, "failed to perform a request "+
 			"to the upstream: %v", err)
@@ -225,19 +225,7 @@ func (server *Server) cacheKey(request *http.Request, rule *rulepkg.Rule) string
 func (server *Server) cache(key string) cachepkg.Cache {
 	if cluster := server.cluster; cluster != nil {
 		if targetNode := cluster.TargetNode(key); targetNode != cluster.LocalNode() {
-			var kvOpts []kv.Option
-
-			if server.localNetworkHelper != nil {
-				httpClient := &http.Client{
-					Transport: &http.Transport{
-						DialContext: server.localNetworkHelper.PrivilegedDialContext,
-					},
-				}
-
-				kvOpts = append(kvOpts, kv.WithHTTPClient(httpClient))
-			}
-
-			return kv.New(targetNode, cluster.Secret(), kvOpts...)
+			return kv.New(targetNode, cluster.Secret(), kv.WithHTTPClient(server.internalHTTPClient))
 		}
 	}
 
