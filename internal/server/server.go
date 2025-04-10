@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/alecthomas/units"
 	cachepkg "github.com/cirruslabs/chacha/internal/cache"
 	"github.com/cirruslabs/chacha/internal/cache/noop"
 	"github.com/cirruslabs/chacha/internal/opentelemetry"
@@ -129,6 +130,21 @@ func New(addr string, opts ...Option) (*Server, error) {
 
 	server.cacheSpeedHistogram, err = opentelemetry.DefaultMeter.Int64Histogram(
 		"org.cirruslabs.chacha.cache.speed_bytes_per_second",
+		metric.WithExplicitBucketBoundaries(
+			100*float64(units.Mega),
+			500*float64(units.Mega),
+			1*float64(units.Giga),
+			2.5*float64(units.Giga),
+			5*float64(units.Giga),
+			7.5*float64(units.Giga),
+			10*float64(units.Giga),
+			15*float64(units.Giga),
+			20*float64(units.Giga),
+			25*float64(units.Giga),
+			30*float64(units.Giga),
+			35*float64(units.Giga),
+			40*float64(units.Giga),
+		),
 	)
 	if err != nil {
 		return nil, err
