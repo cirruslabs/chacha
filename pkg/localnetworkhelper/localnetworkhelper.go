@@ -222,7 +222,7 @@ func (localNetworkHelper *LocalNetworkHelper) handleResponses() {
 		// Parse response(s)
 		decoder := json.NewDecoder(bytes.NewReader(buf[:n]))
 
-		for {
+		for i := 0; ; i++ {
 			var privilegedSocketResponse PrivilegedSocketResponse
 
 			if err := decoder.Decode(&privilegedSocketResponse); err != nil {
@@ -246,7 +246,23 @@ func (localNetworkHelper *LocalNetworkHelper) handleResponses() {
 				return
 			}
 
-			netConn, err := handleResponse(privilegedSocketResponse, oob, oobn)
+			// As per POSIX.1-2017[1] (found in StackOverflow question[2]):
+			//
+			// >Ancillary data is received as if it were queued along with
+			// >the first normal data octet in the segment (if any).
+			//
+			// This means that a single ReadMsgUnix() may yield multiple responses,
+			// but oob will be only valid for the first response.
+			//
+			// [1]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
+			// [2]: https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
+			var currentOOB []byte
+
+			if i == 0 {
+				currentOOB = oob[:oobn]
+			}
+
+			netConn, err := handleResponse(privilegedSocketResponse, currentOOB)
 			processedRequest.ReplyCh <- Reply{
 				Conn: netConn,
 				Err:  err,
@@ -255,12 +271,12 @@ func (localNetworkHelper *LocalNetworkHelper) handleResponses() {
 	}
 }
 
-func handleResponse(privilegedSocketResponse PrivilegedSocketResponse, oob []byte, oobn int) (net.Conn, error) {
+func handleResponse(privilegedSocketResponse PrivilegedSocketResponse, oob []byte) (net.Conn, error) {
 	if privilegedSocketResponse.Error != "" {
 		return nil, fmt.Errorf("%s", privilegedSocketResponse.Error)
 	}
 
-	socketControlMessages, err := unix.ParseSocketControlMessage(oob[:oobn])
+	socketControlMessages, err := unix.ParseSocketControlMessage(oob)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse socket control message: %w", err)
 	}
