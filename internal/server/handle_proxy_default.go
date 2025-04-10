@@ -144,12 +144,12 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		}
 
 		// Metrics
-		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		//nolint:contextcheck // can't use request.Context() here because it might be canceled
 		server.cacheOperationCounter.Add(context.Background(), 1, metric.WithAttributes(
 			attribute.String("type", "miss"),
 		))
 
-		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		//nolint:contextcheck // can't use request.Context() here because it might be canceled
 		server.cacheTransferCounter.Add(context.Background(), upstreamResponse.ContentLength, metric.WithAttributes(
 			attribute.String("type", "miss"),
 		))
@@ -167,12 +167,12 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		}
 
 		// Metrics
-		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		//nolint:contextcheck // can't use request.Context() here because it might be canceled
 		server.cacheOperationCounter.Add(context.Background(), 1, metric.WithAttributes(
 			attribute.String("type", "hit"),
 		))
 
-		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		//nolint:contextcheck // can't use request.Context() here because it might be canceled
 		server.cacheTransferCounter.Add(context.Background(), n, metric.WithAttributes(
 			attribute.String("type", "hit"),
 		))
@@ -188,7 +188,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		}
 
 		// Metrics
-		//nolint:contextcheck // can's use request.Context() here because it might be canceled
+		//nolint:contextcheck // can't use request.Context() here because it might be canceled
 		server.cacheOperationCounter.Add(context.Background(), 1, metric.WithAttributes(
 			attribute.String("type", "not-allowed"),
 		))
