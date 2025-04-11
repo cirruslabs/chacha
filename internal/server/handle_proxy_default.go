@@ -109,7 +109,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		}
 	}
 
-	// Remove end-to-end headers
+	// Remove end-to-end headers from the request
 	removeEndToEndHeaders(upstreamRequest.Header)
 
 	server.logger.Debugf("upstream request: %+v", upstreamRequest)
@@ -121,6 +121,12 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 			"to the upstream: %v", err)
 	}
 	defer upstreamResponse.Body.Close()
+
+	// Remove end-to-end headers from the response
+	removeEndToEndHeaders(upstreamResponse.Header)
+
+	// Remove Chacha-specific headers from the response
+	upstreamResponse.Header.Del("X-Chacha-Direct-Connect")
 
 	// Propagate upstream's response headers to our response
 	for key, values := range upstreamResponse.Header {
@@ -152,8 +158,35 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 
 		return responder.NewEmptyf("fetched from the upstream, cache entry is outdated")
 	case upstreamResponse.StatusCode == http.StatusNotModified && cacheEntryReader != nil:
-		// Our cached entry is up-to-date, return cache entry contents
+		// Our cached entry is up-to-date, perform redirection to a Chacha
+		// server holding this cache entry when direct connect is enabled
+		if server.cluster != nil && rule != nil && rule.DirectConnect() {
+			directConnectURL := url.URL{
+				Scheme: "http",
+				Host:   server.cluster.TargetNode(key),
+				Path:   "/direct-connect",
+			}
 
+			directConnectToken, err := server.generateDirectConnectToken(key)
+			if err != nil {
+				return responder.NewCodef(http.StatusInternalServerError,
+					"failed to generate direct connect token: %v", err)
+			}
+
+			query := request.URL.Query()
+			query.Set("token", directConnectToken)
+			directConnectURL.RawQuery = query.Encode()
+
+			writer.Header().Set("Location", directConnectURL.String())
+
+			// Provide a direct connect hint so that the client
+			// can disable the proxy server for faster retrieval
+			writer.Header().Set("X-Chacha-Direct-Connect", "1")
+
+			return responder.NewCodef(http.StatusTemporaryRedirect, "redirected with a direct connect hint")
+		}
+
+		// Otherwise return the cache entry contents
 		writer.WriteHeader(http.StatusOK)
 
 		copyStartAt := time.Now()
@@ -174,7 +207,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 
 		//nolint:contextcheck // can's use request.Context() here because it might be canceled
 		server.cacheSpeedHistogram.Record(context.Background(), int64(bytesPerSecond), metric.WithAttributes(
-			attribute.String("type", "serve"),
+			attribute.String("type", "hit"),
 		))
 
 		return responder.NewEmptyf("retrieved from the cache")
