@@ -26,7 +26,7 @@ func (server *Server) handleClusterGet(writer http.ResponseWriter, request *http
 	cacheEntryReader, metadata, err := server.disk.Get(request.Context(), key)
 	if err != nil {
 		if errors.Is(err, cachepkg.ErrNotFound) {
-			return responder.NewCodef(http.StatusNotFound, "no cache entry fonud for key %s", key)
+			return responder.NewCodef(http.StatusNotFound, "no cache entry found for key %s", key)
 		}
 
 		return responder.NewCodef(http.StatusInternalServerError, "failed to get cache entry for key %s: %v",

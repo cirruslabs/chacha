@@ -19,6 +19,7 @@ With the following exceptions:
 * [`rules`](#rules-rules-optional) allow to override the default standards-like behavior, for example, you can:
   * ignore the existence of `Authorization` header in the request for caching purposes
   * skip certain URL parameters (e.g. `X-Amz-Date` in S3 pre-signed URLs) from the cache key for caching purposes
+  * perform a redirect to the other server in the Chacha cluster and ask the client to disable the proxy, thus improving the speed
 
 ## Configuration
 
@@ -88,6 +89,9 @@ Defines URLs to consider caching and offers an escape hatch for violating RFC sp
   * `pattern` (string, required) — regular expression that matches the URL to be proxied
   * `ignore-authorization-header` (boolean, optional) — whether to ignore the existence of `Authorization` header for a given URL request, thus enabling its caching
   * `ignore-parameters` (sequence of strings, optional) — names of URL parameters to not include in the final cache key
+  * `direct-connect` (boolean, optional) — enables direct connect functionality, it works like this:
+    * when we have an existing and non-stale cache entry for a given request, the client is issued an HTTP 307 redirect to the Chacha cluster server responsible for the requested URL
+    * this HTTP 307 redirect contains a `X-Chacha-Direct-Connect` header set to `1` as a hint for the client to disable its proxy and get faster download speed
 
 #### Example
 
