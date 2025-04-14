@@ -173,7 +173,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 					"failed to generate direct connect token: %v", err)
 			}
 
-			query := request.URL.Query()
+			query := directConnectURL.Query()
 			query.Set("token", directConnectToken)
 			directConnectURL.RawQuery = query.Encode()
 
