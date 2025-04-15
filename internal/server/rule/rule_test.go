@@ -8,7 +8,7 @@ import (
 
 func TestNewLineIsCounteredByUsingBeginningAndEnd(t *testing.T) {
 	simpleRule, err := rulepkg.New("^.*.good.com$",
-		true, []string{"doesn't matter"}, false)
+		true, []string{"doesn't matter"}, false, false)
 	require.NoError(t, err)
 
 	rules := rulepkg.Rules{simpleRule}
@@ -18,7 +18,7 @@ func TestNewLineIsCounteredByUsingBeginningAndEnd(t *testing.T) {
 
 func TestFirstMatchWins(t *testing.T) {
 	matchGranular, err := rulepkg.New("https://cirrus-ci.com/task/[0-9]+",
-		true, []string{"X-Granular"}, false)
+		true, []string{"X-Granular"}, false, false)
 	require.NoError(t, err)
 
 	rules := rulepkg.Rules{matchGranular}
@@ -26,7 +26,7 @@ func TestFirstMatchWins(t *testing.T) {
 	require.NotNil(t, rule)
 
 	matchCoarse, err := rulepkg.New(`https://cirrus-ci.com/.*`,
-		true, []string{"X-Coarse"}, false)
+		true, []string{"X-Coarse"}, false, false)
 	require.NoError(t, err)
 	require.Equal(t, []string{"X-Granular"}, rule.IgnoredParameters())
 

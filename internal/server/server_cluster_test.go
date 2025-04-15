@@ -26,7 +26,8 @@ func TestCluster(t *testing.T) {
 	logger := zap.Must(zap.NewDevelopment())
 
 	// Configure first Chacha node, in cluster, without a disk
-	catchAllRule, err := rule.New(".*", false, []string{}, false)
+	catchAllRule, err := rule.New(".*", false, []string{}, false,
+		false)
 	require.NoError(t, err)
 
 	firstOpts := []server.Option{

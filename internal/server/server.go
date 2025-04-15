@@ -113,6 +113,16 @@ func New(addr string, opts ...Option) (*Server, error) {
 				DialContext: server.localNetworkHelper.PrivilegedDialContext,
 			},
 		}
+
+		// We need this when using direct connect functionality
+		// with direct connect header disabled
+		server.externalHTTPClient = &http.Client{
+			Transport: &http.Transport{
+				DialContext: server.localNetworkHelper.PrivilegedDialContext,
+
+				DisableCompression: true,
+			},
+		}
 	}
 
 	// Metrics

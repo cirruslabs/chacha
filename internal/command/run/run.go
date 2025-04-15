@@ -98,7 +98,7 @@ func run(cmd *cobra.Command, _ []string) error {
 
 		for _, configMatch := range config.Rules {
 			rule, err := rule.New(configMatch.Pattern, configMatch.IgnoreAuthorizationHeader,
-				configMatch.IgnoreParameters, configMatch.DirectConnect)
+				configMatch.IgnoreParameters, configMatch.DirectConnect, configMatch.DirectConnectHeader)
 			if err != nil {
 				return err
 			}
