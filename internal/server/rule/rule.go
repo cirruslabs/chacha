@@ -12,9 +12,16 @@ type Rule struct {
 	ignoreAuthorizationHeader bool
 	ignoreParameters          []string
 	directConnect             bool
+	directConnectHeader       bool
 }
 
-func New(pattern string, ignoreAuthorizationHeader bool, ignoreParameters []string, directConnect bool) (Rule, error) {
+func New(
+	pattern string,
+	ignoreAuthorizationHeader bool,
+	ignoreParameters []string,
+	directConnect bool,
+	directConnectHeader bool,
+) (Rule, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return Rule{}, fmt.Errorf("failed to parse regular expression for path pattern %s: %w",
@@ -26,6 +33,7 @@ func New(pattern string, ignoreAuthorizationHeader bool, ignoreParameters []stri
 		ignoreAuthorizationHeader: ignoreAuthorizationHeader,
 		ignoreParameters:          ignoreParameters,
 		directConnect:             directConnect,
+		directConnectHeader:       directConnectHeader,
 	}, nil
 }
 
@@ -39,6 +47,10 @@ func (rule Rule) IgnoredParameters() []string {
 
 func (rule Rule) DirectConnect() bool {
 	return rule.directConnect
+}
+
+func (rule Rule) DirectConnectHeader() bool {
+	return rule.directConnectHeader
 }
 
 func (rules Rules) Get(url string) *Rule {

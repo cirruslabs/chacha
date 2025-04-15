@@ -181,7 +181,9 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 
 			// Provide a direct connect hint so that the client
 			// can disable the proxy server for faster retrieval
-			writer.Header().Set("X-Chacha-Direct-Connect", "1")
+			if rule.DirectConnectHeader() {
+				writer.Header().Set("X-Chacha-Direct-Connect", "1")
+			}
 
 			return responder.NewCodef(http.StatusTemporaryRedirect, "redirected with a direct connect hint")
 		}

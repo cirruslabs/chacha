@@ -28,6 +28,7 @@ type Rule struct {
 	IgnoreAuthorizationHeader bool     `yaml:"ignore-authorization-header"`
 	IgnoreParameters          []string `yaml:"ignore-parameters"`
 	DirectConnect             bool     `yaml:"direct-connect"`
+	DirectConnectHeader       bool     `yaml:"direct-connect-header"`
 }
 
 type Cluster struct {
