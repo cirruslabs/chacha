@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel/propagation"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdkresource "go.opentelemetry.io/otel/sdk/resource"
@@ -83,6 +84,12 @@ func Init(ctx context.Context) (zapcore.Core, func(), error) {
 		_ = traceProvider.Shutdown(ctx)
 	})
 	otel.SetTracerProvider(traceProvider)
+
+	// Enable context propagation via W3C Trace Context automatically
+	// when using helpers like otelhttp.NewHandler() and manually
+	// when calling otel.GetTextMapPropagator()'s methods
+	// like Extract() and Inject()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	// Logs
 	logExporter, err := otlploghttp.New(ctx)

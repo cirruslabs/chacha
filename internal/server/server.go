@@ -109,9 +109,9 @@ func New(addr string, opts ...Option) (*Server, error) {
 	// Use a customized internal HTTP client when "Local Network" permission helper is enabled
 	if server.localNetworkHelper != nil {
 		server.internalHTTPClient = &http.Client{
-			Transport: &http.Transport{
+			Transport: otelhttp.NewTransport(&http.Transport{
 				DialContext: server.localNetworkHelper.PrivilegedDialContext,
-			},
+			}),
 		}
 
 		// We need this when using direct connect functionality
@@ -180,7 +180,14 @@ func (server *Server) Run(ctx context.Context) error {
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	server.logger.Debugf("request: %+v", request)
+	logger := server.logger.With(
+		"remote_addr", request.RemoteAddr,
+		"host", request.Host,
+		"method", request.Method,
+		"path", request.URL.Path,
+	)
+
+	logger.Debugf("request: %+v", request)
 
 	// Capture response writer's status code
 	capturingResponseWriter := capturingresponsewriter.Wrap(writer)
@@ -223,13 +230,9 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 
 	responder.Respond(capturingResponseWriter, request)
 
-	server.logger.With(
-		"remote_addr", request.RemoteAddr,
-		"method", request.Method,
+	logger.With(
 		"status_code", capturingResponseWriter.StatusCode(),
 		"operation", operation,
-		"host", request.Host,
-		"path", request.URL.Path,
 	).Infof("%s", responder.Message())
 
 	// Metrics

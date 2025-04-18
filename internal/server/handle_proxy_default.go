@@ -114,8 +114,17 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 
 	server.logger.Debugf("upstream request: %+v", upstreamRequest)
 
+	// Determine the HTTP client to use
+	var httpClient *http.Client
+
+	if server.cluster != nil && server.cluster.ContainsNode(upstreamRequest.URL.Host) {
+		httpClient = server.internalHTTPClient
+	} else {
+		httpClient = server.externalHTTPClient
+	}
+
 	// Perform an upstream request
-	upstreamResponse, err := server.externalHTTPClient.Do(upstreamRequest)
+	upstreamResponse, err := httpClient.Do(upstreamRequest)
 	if err != nil {
 		return responder.NewCodef(http.StatusInternalServerError, "failed to perform a request "+
 			"to the upstream: %v", err)
