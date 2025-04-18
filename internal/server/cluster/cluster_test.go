@@ -45,3 +45,14 @@ func TestClusterStabilityRemove(t *testing.T) {
 
 	require.Equal(t, cluster1.TargetNode("test"), cluster2.TargetNode("test"))
 }
+
+func TestClusterContainsNode(t *testing.T) {
+	cluster := cluster.New("doesn't matter", "whatever", []config.Node{
+		{Addr: "192.168.0.1"},
+		{Addr: "192.168.0.2"},
+		{Addr: "192.168.0.3"},
+	})
+
+	require.True(t, cluster.ContainsNode("192.168.0.2"))
+	require.False(t, cluster.ContainsNode("192.168.0.4"))
+}

@@ -117,7 +117,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 	// Determine the HTTP client to use
 	var httpClient *http.Client
 
-	if server.cluster.ContainsNode(upstreamRequest.URL.Host) {
+	if server.cluster != nil && server.cluster.ContainsNode(upstreamRequest.URL.Host) {
 		httpClient = server.internalHTTPClient
 	} else {
 		httpClient = server.externalHTTPClient
