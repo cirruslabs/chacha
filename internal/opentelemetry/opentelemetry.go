@@ -86,7 +86,7 @@ func Init(ctx context.Context) (zapcore.Core, func(), error) {
 	otel.SetTracerProvider(traceProvider)
 
 	// Enable context propagation via W3C Trace Context automatically
-	// when using helpers like otelhttp.NewHandler() and manuall
+	// when using helpers like otelhttp.NewHandler() and manually
 	// when calling otel.GetTextMapPropagator()'s methods
 	// like Extract() and Inject()
 	otel.SetTextMapPropagator(propagation.TraceContext{})
