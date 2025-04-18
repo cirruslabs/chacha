@@ -89,9 +89,8 @@ Defines URLs to consider caching and offers an escape hatch for violating RFC sp
   * `pattern` (string, required) — regular expression that matches the URL to be proxied
   * `ignore-authorization-header` (boolean, optional) — whether to ignore the existence of `Authorization` header for a given URL request, thus enabling its caching
   * `ignore-parameters` (sequence of strings, optional) — names of URL parameters to not include in the final cache key
-  * `direct-connect` (boolean, optional) — enables direct connect functionality, it works like this:
-    * when we have an existing and non-stale cache entry for a given request, the client is issued an HTTP 307 redirect to the Chacha cluster server responsible for the requested URL
-    * this HTTP 307 redirect contains a `X-Chacha-Direct-Connect` header set to `1` as a hint for the client to disable its proxy and get faster download speed
+  * `direct-connect` (boolean, optional) — when Chacha has an existing and non-stale cache entry for a given request, the client is issued an HTTP 307 redirect to the Chacha cluster server responsible for the requested URL
+  * `direct-connect-header` — when using `direct-connect` functionality, adds a `X-Chacha-Direct-Connect` header set to `1` to an issued HTTP 307 redirect as a hint for the client to disable its proxy and get faster download speed
 
 #### Example
 

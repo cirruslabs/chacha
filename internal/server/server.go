@@ -230,10 +230,19 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 
 	responder.Respond(capturingResponseWriter, request)
 
-	logger.With(
+	logger = logger.With(
 		"status_code", capturingResponseWriter.StatusCode(),
 		"operation", operation,
-	).Infof("%s", responder.Message())
+	)
+
+	switch {
+	case capturingResponseWriter.StatusCode() >= 400 && capturingResponseWriter.StatusCode() < 500:
+		logger.Warnf("%s", responder.Message())
+	case capturingResponseWriter.StatusCode() >= 500 && capturingResponseWriter.StatusCode() < 600:
+		logger.Errorf("%s", responder.Message())
+	default:
+		logger.Infof("%s", responder.Message())
+	}
 
 	// Metrics
 	//nolint:contextcheck // can's use request.Context() here because it might be canceled
