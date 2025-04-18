@@ -144,7 +144,7 @@ func (server *Server) handleProxyDefault(writer http.ResponseWriter, request *ht
 		}
 	}
 
-	server.logger.Debugf("upstream response: %v", upstreamResponse)
+	server.logger.Debugf("upstream response: %+v", upstreamResponse)
 
 	switch {
 	case upstreamResponse.StatusCode == http.StatusOK && server.shouldCache(request, upstreamResponse, rule):
