@@ -19,8 +19,6 @@ import (
 	"time"
 )
 
-const CommandName = "localnetworkhelper"
-
 type PrivilegedSocketRequest struct {
 	Token   string `json:"token"`
 	Network string `json:"network"`
