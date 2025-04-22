@@ -46,3 +46,7 @@ func (cluster *Cluster) TargetNode(key string) string {
 func (cluster *Cluster) ContainsNode(node string) bool {
 	return cluster.nodes.ContainsOne(node)
 }
+
+func (cluster *Cluster) Nodes() []string {
+	return cluster.nodes.ToSlice()
+}

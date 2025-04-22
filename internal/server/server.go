@@ -160,6 +160,14 @@ func New(addr string, opts ...Option) (*Server, error) {
 		return nil, err
 	}
 
+	if server.cluster != nil {
+		_, err = opentelemetry.DefaultMeter.Int64ObservableGauge("org.cirruslabs.chacha.cluster.health",
+			metric.WithInt64Callback(server.clusterHealthCallback))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return server, nil
 }
 
