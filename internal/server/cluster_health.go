@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const clusterHealthCheckTimeout = 5 * time.Second
+const clusterHealthCheckTimeout = 30 * time.Second
 
 func (server *Server) clusterHealthCallback(ctx context.Context, observer metric.Int64Observer) error {
 	type Result struct {
@@ -40,16 +40,17 @@ func (server *Server) clusterHealthCallback(ctx context.Context, observer metric
 	close(results)
 
 	for result := range results {
-		var value int64
+		var status string
 
 		if result.Healthy {
-			value = 1
+			status = "healthy"
 		} else {
-			value = 0
+			status = "unhealthy"
 		}
 
-		observer.Observe(value, metric.WithAttributes(
+		observer.Observe(1, metric.WithAttributes(
 			attribute.String("node", result.Node),
+			attribute.String("status", status),
 		))
 	}
 
