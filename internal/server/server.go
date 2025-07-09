@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/alecthomas/units"
 	cachepkg "github.com/cirruslabs/chacha/internal/cache"
-	"github.com/cirruslabs/chacha/internal/cache/noop"
+	nooppkg "github.com/cirruslabs/chacha/internal/cache/noop"
 	"github.com/cirruslabs/chacha/internal/opentelemetry"
 	"github.com/cirruslabs/chacha/internal/server/capturingresponsewriter"
 	"github.com/cirruslabs/chacha/internal/server/cluster"
@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/zap"
 	"net"
 	"net/http"
@@ -65,7 +66,8 @@ func New(addr string, opts ...Option) (*Server, error) {
 
 	// Configure HTTP server
 	server.httpServer = &http.Server{
-		Handler:           otelhttp.NewHandler(server, "http.request"),
+		Handler: otelhttp.NewHandler(server, "http.request",
+			otelhttp.WithMeterProvider(noop.NewMeterProvider())),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 
@@ -76,7 +78,7 @@ func New(addr string, opts ...Option) (*Server, error) {
 
 	// Apply defaults
 	if server.disk == nil {
-		server.disk = noop.New()
+		server.disk = nooppkg.New()
 	}
 
 	if server.logger == nil {
@@ -111,7 +113,7 @@ func New(addr string, opts ...Option) (*Server, error) {
 		server.internalHTTPClient = &http.Client{
 			Transport: otelhttp.NewTransport(&http.Transport{
 				DialContext: server.localNetworkHelper.PrivilegedDialContext,
-			}),
+			}, otelhttp.WithMeterProvider(noop.NewMeterProvider())),
 		}
 
 		// We need this when using direct connect functionality
