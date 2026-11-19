@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -87,6 +88,28 @@ func TestLocalNetworkHelper(t *testing.T) {
 	wg.Wait()
 
 	require.NoError(t, localNetworkHelper.Close())
+}
+
+func TestLocalNetworkHelperReadsAcrossSocketBoundaries(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	helper, err := localnetworkhelper.New(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = helper.Close() })
+
+	// Force the request across the old 4 KiB read boundary. An unknown network
+	// returns a short dial error, so only the request spans multiple reads.
+	_, err = helper.PrivilegedDialContext(ctx, "unknown", strings.Repeat("x", 8192))
+	require.ErrorContains(t, err, "unknown network unknown")
+
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+
+	conn, err := helper.PrivilegedDialContext(ctx, "tcp4", listener.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
 }
 
 func TestLocalNetworkHelperRespectsContext(t *testing.T) {

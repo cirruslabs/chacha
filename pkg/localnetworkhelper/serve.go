@@ -3,7 +3,6 @@
 package localnetworkhelper
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,8 +42,8 @@ func Serve(fd int) error {
 		return fmt.Errorf("expected *net.UnixConn, got %T", conn)
 	}
 
-	// Serve requests
-	buf := make([]byte, 4096)
+	// A request can span multiple reads from the stream socket.
+	decoder := json.NewDecoder(unixConn)
 
 	for {
 		// Check for global local network helper error first
@@ -52,37 +51,21 @@ func Serve(fd int) error {
 			return *err
 		}
 
-		// Read next request
-		n, err := unixConn.Read(buf)
-		if err != nil {
+		var request PrivilegedSocketRequest
+		if err := decoder.Decode(&request); err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
 
-			return fmt.Errorf("failed to read from unix socket: %w", err)
+			return fmt.Errorf("failed to unmarshal privileged socket request: %w", err)
 		}
 
-		// Parse request(s)
-		decoder := json.NewDecoder(bytes.NewReader(buf[:n]))
-
-		for {
-			var privilegedSocketRequest PrivilegedSocketRequest
-
-			if err := decoder.Decode(&privilegedSocketRequest); err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-
-				return fmt.Errorf("failed to unmarshal privileged socket request: %w", err)
+		// Handle request concurrently
+		go func() {
+			if err := helper.handleRequest(unixConn, request); err != nil {
+				helper.err.CompareAndSwap(nil, &err)
 			}
-
-			// Handle request concurrently
-			go func() {
-				if err := helper.handleRequest(unixConn, privilegedSocketRequest); err != nil {
-					helper.err.CompareAndSwap(nil, &err)
-				}
-			}()
-		}
+		}()
 	}
 }
 
